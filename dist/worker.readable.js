@@ -1949,6 +1949,8 @@ function getEnvConfigSnapshot(env = {}) {
 // --- MODULE: src/config/presets.js ---
 // ============================================================================
 // miliconfig v3.2 - پریست‌های ساخت سریع کاربر
+// هر پریست تنظیمات موتور مخصوص خودش را دارد (پروتکل، فرگمنت، خروجی، WARP و...)
+// و کشورهای استخر آی‌پی خودش را برای دکمه‌های گرد ساخت سریع اعلام می‌کند.
 // ============================================================================
 
 
@@ -1957,14 +1959,16 @@ const USER_PRESETS = {
     id: 'iran-fast',
     title: 'ایران — پرسرعت و ضد فیلتر (پیشنهادی)',
     subtitle: 'همراه اول · ایرانسل · مخابرات · دور زدن فیلتر Pages.dev',
-    badges: ['فرگمنت 10-30/100-200', 'SNI ضد DPI', 'آی‌پی تمیز Anycast'],
+    badges: ['فرگمنت 10-30/100-200', 'SNI ضد DPI', 'آی‌پی تمیز از مخزن آلمان'],
     recommended: true,
     nodeScope: 'all',
     subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
-    ipLimit: 50,
+    ipLimit: 3,
     startOnFirstUse: true,
+    poolCountries: 'DE',
+    poolCount: 8,
     configOverrides: {
       ev: 'yes',
       et: 'no',
@@ -1976,6 +1980,8 @@ const USER_PRESETS = {
       fragmentLength: '100-200',
       fragmentInterval: '10-20',
       fragmentPackets: 'tlshello',
+      ech: 'no',
+      dkby: 'no',
       epd: 'yes',
       epi: 'yes',
       egi: 'yes',
@@ -1983,21 +1989,26 @@ const USER_PRESETS = {
       ipv4: 'yes',
       ipv6: 'yes',
       sb: 'yes',
-      sbRegion: 'DE'
+      sbRegion: 'DE',
+      ipRotation: 'off',
+      tcp: 'yes',
+      udp: 'yes'
     }
   },
   'pages-iran': {
     id: 'pages-iran',
     title: 'ایران — ضد فیلتر قوی (ویژه Pages.dev فیلترشده)',
     subtitle: 'عبور از فیلترینگ SNI و مسدودی دامنهٔ pages.dev و workers.dev',
-    badges: ['فرگمنت ریز 10-30', 'Mixed-Case SNI', 'xHTTP + VLESS'],
+    badges: ['xHTTP + VLESS', 'ECH + DoH', 'فرگمنت Anti-DPI'],
     recommended: false,
     nodeScope: 'all',
     subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
-    ipLimit: 50,
+    ipLimit: 2,
     startOnFirstUse: true,
+    poolCountries: 'DE,NL',
+    poolCount: 8,
     configOverrides: {
       ev: 'yes',
       et: 'no',
@@ -2006,32 +2017,39 @@ const USER_PRESETS = {
       fp: 'chrome',
       alpn: 'h2,http/1.1',
       frag: 'yes',
-      fragmentPreset: 'custom',
+      fragmentPreset: 'anti-dpi',
       fragmentLength: '10-30',
-      fragmentInterval: '10-20',
+      fragmentInterval: '20-40',
       fragmentPackets: 'tlshello',
+      ech: 'yes',
+      dkby: 'yes',
       epd: 'yes',
       epi: 'yes',
       egi: 'yes',
       ena: 'yes',
       ipv4: 'yes',
-      ipv6: 'yes',
+      ipv6: 'no',
       sb: 'yes',
-      sbRegion: 'DE'
+      sbRegion: 'NL',
+      ipRotation: 'off',
+      tcp: 'yes',
+      udp: 'yes'
     }
   },
   'iran-heavy': {
     id: 'iran-heavy',
     title: 'ایران — مصرف سنگین (نامحدود)',
     subtitle: 'استریم · بازی · دانلود',
-    badges: ['حجم نامحدود', 'فرگمنت 50-100', '۲ دستگاه همزمان'],
+    badges: ['VLESS + Trojan', 'فرگمنت ایرانسل 50-100', 'خروجی ترکیه'],
     recommended: false,
     nodeScope: 'all',
     subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
-    ipLimit: 2,
+    ipLimit: 5,
     startOnFirstUse: true,
+    poolCountries: 'TR,DE',
+    poolCount: 8,
     configOverrides: {
       ev: 'yes',
       et: 'yes',
@@ -2043,53 +2061,102 @@ const USER_PRESETS = {
       fragmentLength: '50-100',
       fragmentInterval: '5-10',
       fragmentPackets: 'tlshello',
+      ech: 'no',
+      dkby: 'yes',
       epd: 'yes',
       epi: 'yes',
       egi: 'yes',
+      ena: 'yes',
+      ipv4: 'yes',
+      ipv6: 'yes',
       sb: 'yes',
-      sbRegion: 'NL'
+      sbRegion: 'TR',
+      ipRotation: 'off',
+      tcp: 'yes',
+      udp: 'yes'
     }
   },
   'international': {
     id: 'international',
     title: 'بین‌المللی — بدون فرگمنت',
     subtitle: 'اینترنت بدون محدودیت · سرعت حداکثری',
-    badges: ['بدون فرگمنت', 'بدون محدودیت حجم', '۵ دستگاه همزمان'],
+    badges: ['بدون فرگمنت', 'WARP MASQUE', 'خروجی مستقیم'],
     recommended: false,
     nodeScope: 'all',
     subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
-    ipLimit: 5,
+    ipLimit: 6,
     startOnFirstUse: true,
+    poolCountries: 'US,DE,GB,NL',
+    poolCount: 8,
     configOverrides: {
       ev: 'yes',
-      et: 'no',
+      et: 'yes',
       ex: 'no',
       es: 'no',
+      fp: 'safari',
+      alpn: 'h2,http/1.1',
+      frag: 'no',
+      fragmentPreset: 'off',
+      ech: 'yes',
       dkby: 'yes',
-      alpn: 'h2,http/1.1'
+      epd: 'yes',
+      epi: 'no',
+      egi: 'yes',
+      ena: 'yes',
+      ipv4: 'yes',
+      ipv6: 'yes',
+      sb: 'no',
+      sbRegion: 'US',
+      ipRotation: 'off',
+      warpMasque: 'yes',
+      warpMasqueCount: '2',
+      tcp: 'yes',
+      udp: 'yes'
     }
   },
   'multi-location': {
     id: 'multi-location',
     title: 'چند لوکیشن — فقط نودهای لبه و VIP',
     subtitle: 'لوکیشن‌های تفکیک‌شده آلمان، هلند، آمریکا و...',
-    badges: ['فقط نودهای مولتی‌لوکیشن', 'نام‌گذاری number+miliconfig', 'فرگمنت فعال'],
+    badges: ['۶ کشور از مخزن', 'VLESS + Trojan + SS', 'WARP چندلوکیشن'],
     recommended: false,
     nodeScope: 'edge',
     subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
-    ipLimit: 50,
+    ipLimit: 4,
     startOnFirstUse: true,
+    poolCountries: 'DE,NL,US,TR,FR,GB',
+    poolCount: 12,
     configOverrides: {
       ev: 'yes',
-      es: 'no',
+      et: 'yes',
+      ex: 'no',
+      es: 'yes',
+      fp: 'firefox',
+      frag: 'yes',
+      fragmentPreset: 'custom',
+      fragmentLength: '20-50',
+      fragmentInterval: '10-20',
+      fragmentPackets: 'tlshello',
+      ech: 'yes',
+      dkby: 'yes',
       epd: 'yes',
       epi: 'yes',
       egi: 'yes',
-      ena: 'yes'
+      ena: 'yes',
+      ipv4: 'yes',
+      ipv6: 'yes',
+      sb: 'yes',
+      sbRegion: 'DE',
+      ipRotation: '15m',
+      warp: 'yes',
+      warpMl: 'yes',
+      warpCount: '6',
+      tcp: 'yes',
+      udp: 'yes'
     }
   },
   'direct-only': {
@@ -4524,7 +4591,15 @@ async function ensureD1Schema(env = {}, force = false) {
   }
 }
 
+// نسخهٔ اسکیما: با هر تغییر ستون/جدول یک عدد بالا می‌رود تا دیتابیس‌های قدیمی
+// که کاربر دارند هم مهاجرت شوند. قبلاً مسیر سریع هنگام وجود کاربر، مهاجرت را
+// کامل رد می‌کرد و ستون‌های تازه در D1 ساخته نمی‌شدند (باگ ذخیره‌نشدن).
+const D1_SCHEMA_VERSION = '4';
+
 async function _runEnsureD1Schema(env, db, bindingName, force) {
+  let hasUsers = false;
+  let schemaVersion = '';
+
   if (!force) {
     try {
       const [usersRes, cfgRes] = await Promise.all([
@@ -4532,30 +4607,38 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
         db.prepare(`SELECT key, value FROM system_config`).all()
       ]);
       const userRows = usersRes?.results || [];
+      const cfgRows = cfgRes?.results || [];
+      const now = Date.now();
+      const stored = {};
+      for (const r of cfgRows) {
+        if (!r || !r.key) continue;
+        if (r.key === 'admin_path' && r.value) memoryStore.adminPath = String(r.value).trim().toLowerCase();
+        if (r.key === 'admin_password_hash' && r.value) memoryStore.adminPasswordHash = String(r.value).trim();
+        if (r.key === 'schema_version' && r.value) schemaVersion = String(r.value).trim();
+        if (r.key === 'cf_token' || r.key === 'schema_version' || r.key.startsWith('secret_')) continue;
+        stored[r.key] = r.value;
+      }
+      if (Object.keys(stored).length) {
+        memoryStore.globalConfig = { ...memoryStore.globalConfig, ...stored };
+      }
       if (userRows.length > 0) {
-        const now = Date.now();
         memoryStore.users.clear();
         for (const r of userRows) {
           const u = mapUserRow(r);
           if (u) memoryStore.users.set(u.id, u);
         }
         memoryStore.lastUsersSyncAt = now;
-        const cfgRows = cfgRes?.results || [];
-        const stored = {};
-        for (const r of cfgRows) {
-          if (!r || !r.key) continue;
-          if (r.key === 'admin_path' && r.value) memoryStore.adminPath = String(r.value).trim().toLowerCase();
-          if (r.key === 'admin_password_hash' && r.value) memoryStore.adminPasswordHash = String(r.value).trim();
-          if (r.key === 'cf_token' || r.key.startsWith('secret_')) continue;
-          stored[r.key] = r.value;
-        }
-        memoryStore.globalConfig = { ...memoryStore.globalConfig, ...stored };
-        memoryStore.lastSyncAt = now;
-        memoryStore.d1SchemaReady = true;
-        memoryStore.d1Error = null;
-        return { d1Enabled: true, bindingName, migrated: true, error: null };
+        hasUsers = true;
       }
+      memoryStore.lastSyncAt = now;
     } catch (_fastErr) {}
+  }
+
+  // فقط وقتی نسخهٔ اسکیما تأیید شده باشد از مهاجرت عبور می‌کنیم؛ دیتابیس قدیمی
+  // یا دیتابیسی که نسخه ندارد یک‌بار کامل مهاجرت می‌شود.
+  if (hasUsers && schemaVersion === D1_SCHEMA_VERSION) {
+    memoryStore.d1SchemaReady = true;
+    return { d1Enabled: true, bindingName, migrated: true, error: memoryStore.d1Error };
   }
 
   const ddlStatements = [
@@ -4637,10 +4720,12 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
   // هر دستور DDL جداگانه اجرا می‌شود؛ یک جدول مشکل‌دار نباید کل اسکیما (و در
   // نتیجه ذخیرهٔ تنظیمات در D1) را از کار بیندازد.
   const schemaErrors = [];
+  let migrationComplete = true;
   for (const sql of ddlStatements) {
     try {
       await db.prepare(sql).run();
     } catch (err) {
+      migrationComplete = false;
       schemaErrors.push(err?.message || String(err));
     }
   }
@@ -4648,13 +4733,19 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
   // جدول‌هایی که با نسخهٔ قدیمی ساخته شده‌اند ستون‌های تازه را ندارند و همین
   // باعث می‌شد INSERT در D1 خطا بدهد و تنظیمات فقط در حافظه بماند.
   try {
-    schemaErrors.push(...await addMissingColumns(db, 'users', USER_TABLE_COLUMNS));
+    const userColumnErrors = await addMissingColumns(db, 'users', USER_TABLE_COLUMNS);
+    if (userColumnErrors.length) migrationComplete = false;
+    schemaErrors.push(...userColumnErrors);
   } catch (err) {
+    migrationComplete = false;
     schemaErrors.push(err?.message || String(err));
   }
   try {
-    schemaErrors.push(...await addMissingColumns(db, 'system_config', SYSTEM_CONFIG_COLUMNS));
+    const configColumnErrors = await addMissingColumns(db, 'system_config', SYSTEM_CONFIG_COLUMNS);
+    if (configColumnErrors.length) migrationComplete = false;
+    schemaErrors.push(...configColumnErrors);
   } catch (err) {
+    migrationComplete = false;
     schemaErrors.push(err?.message || String(err));
   }
 
@@ -4682,6 +4773,25 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
 
   try {
     memoryStore.d1SchemaReady = true;
+
+    // ثبت نسخهٔ اسکیما تا درخواست‌های بعدی از مهاجرت دوباره صرف‌نظر کنند.
+    // اگر مهاجرت کامل نشده باشد نسخه ثبت نمی‌شود تا در ایزولهٔ بعدی دوباره تلاش شود.
+    if (migrationComplete) {
+      try {
+        await safeBind(
+          db.prepare(
+            `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+          ),
+          'schema_version',
+          D1_SCHEMA_VERSION,
+          Date.now()
+        ).run();
+      } catch (err) {
+        schemaErrors.push('schema_version: ' + (err?.message || String(err)));
+      }
+    }
+
     memoryStore.d1Error = schemaErrors.filter(Boolean).join(' | ') || null;
 
     // بررسی وجود کاربر اولیه
@@ -4947,7 +5057,7 @@ async function loadGlobalConfig(env = {}, force = false) {
         if (!r || !r.key) continue;
         if (r.key === 'admin_path' && r.value) memoryStore.adminPath = String(r.value).trim().toLowerCase();
         if (r.key === 'admin_password_hash' && r.value) memoryStore.adminPasswordHash = String(r.value).trim();
-        if (r.key === 'cf_token' || r.key.startsWith('secret_')) continue;
+        if (r.key === 'cf_token' || r.key === 'schema_version' || r.key.startsWith('secret_')) continue;
         stored[r.key] = r.value;
       }
     } catch (_e) {}
@@ -5147,6 +5257,7 @@ async function createUser(env = {}, payload = {}, clientIp = '') {
   const now = Date.now();
 
   const presetId = payload.preset || 'iran-fast';
+  const presetDef = USER_PRESETS[presetId] || {};
   const rawName = String(payload.username || payload.name || '').trim();
   const id = payload.id && String(payload.id).trim() ? String(payload.id).trim() : generateShortId('mili');
   const username = rawName || id;
@@ -5205,12 +5316,16 @@ async function createUser(env = {}, payload = {}, clientIp = '') {
     }
   );
 
-  const dataLimitGb = Math.max(0, Number(payload.dataLimitGb ?? 0) || 0);
-  const expireDays = Math.max(0, parseInt(payload.expireDays ?? 0, 10) || 0);
-  const startOnFirstUse = payload.startOnFirstUse !== undefined ? Boolean(payload.startOnFirstUse) : true;
+  // مقادیر ارسالی کاربر اولویت دارند؛ در نبود آن‌ها تنظیمات اختصاصی همان پریست
+  // اعمال می‌شود تا هر دکمهٔ ساخت سریع، سهمیه و محدودیت منحصربه‌فرد خودش را داشته باشد.
+  const dataLimitGb = Math.max(0, Number(payload.dataLimitGb ?? presetDef.dataLimitGb ?? 0) || 0);
+  const expireDays = Math.max(0, parseInt(payload.expireDays ?? presetDef.expireDays ?? 0, 10) || 0);
+  const startOnFirstUse = payload.startOnFirstUse !== undefined
+    ? Boolean(payload.startOnFirstUse)
+    : presetDef.startOnFirstUse !== false;
   const expireAt = !startOnFirstUse && expireDays > 0 ? now + expireDays * 86400 * 1000 : 0;
-  const ipLimit = Math.max(1, parseInt(payload.ipLimit ?? 50, 10) || 50);
-  const nodeScope = String(payload.nodeScope || 'all');
+  const ipLimit = Math.max(1, parseInt(payload.ipLimit ?? presetDef.ipLimit ?? 50, 10) || 50);
+  const nodeScope = String(payload.nodeScope || presetDef.nodeScope || 'all');
   const enabled = payload.enabled !== undefined ? Boolean(payload.enabled) : true;
   const note = String(payload.note || '');
 
@@ -5692,28 +5807,52 @@ async function importFullBackup(env = {}, payload = {}, clientIp = '') {
   if (!payload || typeof payload !== 'object') {
     throw new Error('ساختار فایل بکاپ نامعتبر است');
   }
-  await ensureD1Schema(env);
-  const mode = payload.mode === 'replace' ? 'replace' : 'merge';
+  const schema = await ensureD1Schema(env);
   const detectedD1 = detectD1Binding(env);
+  const d1Ready = Boolean(detectedD1 && schema.d1Enabled && memoryStore.d1SchemaReady);
+  const mode = payload.mode === 'replace' ? 'replace' : 'merge';
+  const failures = [];
 
   let configRestored = false;
   if (payload.globalConfig && typeof payload.globalConfig === 'object') {
     await saveGlobalConfig(env, payload.globalConfig);
-    configRestored = true;
+    if (d1Ready) {
+      const keys = Object.keys(payload.globalConfig).filter(key => {
+        const value = payload.globalConfig[key];
+        return value !== '' && value !== null && value !== undefined;
+      });
+      const verification = await verifyConfigInD1(env, keys);
+      if (verification.error || verification.missing.length) {
+        failures.push('تنظیمات: ' + (verification.error || 'ذخیره نشد: ' + verification.missing.join(', ')));
+      } else {
+        configRestored = true;
+      }
+    } else {
+      configRestored = true;
+    }
   }
 
   let usersRestored = 0;
+  let usersFailed = 0;
   if (Array.isArray(payload.users)) {
+    let canReplace = true;
     if (mode === 'replace' && payload.users.length > 0) {
-      memoryStore.users.clear();
-      memoryStore.pendingUserFlush.clear();
-      if (detectedD1 && memoryStore.d1SchemaReady) {
+      if (d1Ready) {
         try {
           const current = await detectedD1.db.prepare('SELECT id FROM users').all();
           for (const r of (current?.results || [])) {
             await safeBind(detectedD1.db.prepare('DELETE FROM users WHERE id = ?'), r.id).run();
           }
-        } catch (_e) {}
+          const check = await detectedD1.db.prepare('SELECT COUNT(*) as cnt FROM users').first();
+          if (Number(check?.cnt || 0) > 0) throw new Error('ردیف‌های قبلی از D1 حذف نشدند');
+        } catch (err) {
+          canReplace = false;
+          failures.push('حذف کاربران قبلی: ' + (err?.message || String(err)));
+        }
+      }
+      if (canReplace) {
+        memoryStore.users.clear();
+        memoryStore.pendingUserFlush.clear();
       }
     }
 
@@ -5721,9 +5860,13 @@ async function importFullBackup(env = {}, payload = {}, clientIp = '') {
     const now = Date.now();
     for (const u of incomingUsers) {
       if (!u || typeof u !== 'object') continue;
-      if (memoryStore.users.size >= MAX_USERS_LIMIT && !memoryStore.users.has(u.id)) continue;
       const id = String(u.id || generateShortId('mili')).trim();
       const username = String(u.username || id).trim();
+      if (memoryStore.users.size >= MAX_USERS_LIMIT && !memoryStore.users.has(id)) {
+        usersFailed++;
+        failures.push(`کاربر «${username}»: سقف ${MAX_USERS_LIMIT} کاربر تکمیل است`);
+        continue;
+      }
       const uuid = isValidUuid(u.uuid) ? String(u.uuid).trim().toLowerCase() : generateUuidV4();
       const subNodeCount = Number(u.subNodeCount ?? 50) || 50;
       const status = String(u.status || 'active');
@@ -5735,71 +5878,123 @@ async function importFullBackup(env = {}, payload = {}, clientIp = '') {
       const expireDays = Math.max(0, Number(u.expireDays) || 0);
       const expireAt = Math.max(0, Number(u.expireAt) || 0);
       const startOnFirstUse = u.startOnFirstUse !== false;
+      const firstConnectedAt = Math.max(0, Number(u.firstConnectedAt) || 0);
       const ipLimit = Math.max(1, Number(u.ipLimit) || 50);
       const nodeScope = String(u.nodeScope || 'all');
       const preset = String(u.preset || 'iran-fast');
+      const note = String(u.note || '');
       const config = normalizeEffectiveConfig(u.config || {});
+      const createdAt = Number(u.createdAt || now);
       const userObj = {
         id, username, uuid, subNodeCount, status, enabled,
         dataLimitGb, usedBytes, lifetimeBytes, requestCount,
-        expireDays, expireAt, startOnFirstUse, firstConnectedAt: Number(u.firstConnectedAt || 0),
-        ipLimit, nodeScope, preset, note: String(u.note || ''),
-        config, createdAt: Number(u.createdAt || now), updatedAt: now
+        expireDays, expireAt, startOnFirstUse, firstConnectedAt,
+        ipLimit, nodeScope, preset, note,
+        config, createdAt, updatedAt: now
       };
-      memoryStore.users.set(id, userObj);
-      if (detectedD1 && memoryStore.d1SchemaReady) {
-        try {
-          await safeBind(
-            detectedD1.db.prepare(
-              `INSERT OR REPLACE INTO users (
-                id, username, uuid, sub_node_count, status, enabled,
-                data_limit_gb, used_bytes, lifetime_bytes, request_count,
-                expire_days, expire_at, start_on_first_use, ip_limit,
-                node_scope, preset, config_json, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            ),
-            id, username, uuid, subNodeCount, status, enabled ? 1 : 0,
-            dataLimitGb, usedBytes, lifetimeBytes, requestCount,
-            expireDays, expireAt, startOnFirstUse ? 1 : 0, ipLimit,
-            nodeScope, preset, JSON.stringify({ ...config, __note: userObj.note }),
-            userObj.createdAt, now
-          ).run();
-        } catch (_e) {}
+
+      if (!d1Ready) {
+        // حالت بدون D1: فقط حافظهٔ همین ایزوله در دسترس است.
+        memoryStore.users.set(id, userObj);
+        usersRestored++;
+        continue;
       }
-      usersRestored++;
+
+      try {
+        await safeBind(
+          detectedD1.db.prepare(
+            `INSERT INTO users (
+              id, username, uuid, sub_node_count, status, enabled,
+              data_limit_gb, used_bytes, lifetime_bytes, request_count,
+              expire_days, expire_at, start_on_first_use, ip_limit,
+              node_scope, preset, config_json, note, first_connected_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              username = excluded.username,
+              uuid = excluded.uuid,
+              sub_node_count = excluded.sub_node_count,
+              status = excluded.status,
+              enabled = excluded.enabled,
+              data_limit_gb = excluded.data_limit_gb,
+              used_bytes = excluded.used_bytes,
+              lifetime_bytes = excluded.lifetime_bytes,
+              request_count = excluded.request_count,
+              expire_days = excluded.expire_days,
+              expire_at = excluded.expire_at,
+              start_on_first_use = excluded.start_on_first_use,
+              ip_limit = excluded.ip_limit,
+              node_scope = excluded.node_scope,
+              preset = excluded.preset,
+              config_json = excluded.config_json,
+              note = excluded.note,
+              first_connected_at = excluded.first_connected_at,
+              updated_at = excluded.updated_at`
+          ),
+          id, username, uuid, subNodeCount, status, enabled ? 1 : 0,
+          dataLimitGb, usedBytes, lifetimeBytes, requestCount,
+          expireDays, expireAt, startOnFirstUse ? 1 : 0, ipLimit,
+          nodeScope, preset, JSON.stringify(config), note, firstConnectedAt,
+          createdAt, now
+        ).run();
+        // تأیید واقعی نوشتن؛ قبلاً خطاها بی‌صدا رد می‌شدند و پیام «بازیابی شد»
+        // حتی وقتی هیچ ردیفی در D1 ذخیره نشده بود نمایش داده می‌شد.
+        const check = await detectedD1.db.prepare('SELECT id FROM users WHERE id = ?').bind(id).first();
+        if (!check || !check.id) throw new Error('ردیف در D1 پیدا نشد');
+        memoryStore.users.set(id, userObj);
+        usersRestored++;
+      } catch (err) {
+        usersFailed++;
+        failures.push(`کاربر «${username}»: ${err?.message || String(err)}`);
+      }
     }
     memoryStore.lastUsersSyncAt = Date.now();
   }
 
   let telegramProxyRestored = false;
-  if (payload.telegramProxy && typeof payload.telegramProxy === 'object' && payload.telegramProxy.secret && detectedD1 && memoryStore.d1SchemaReady) {
-    try {
-      const tp = payload.telegramProxy;
-      const now = Date.now();
-      await safeBind(
-        detectedD1.db.prepare(
-          `INSERT OR REPLACE INTO telegram_proxy (
-            id, name, secret, status, enabled, last_seen,
-            traffic_total, req_total, req_today, req_date, created_at, updated_at
-          ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ),
-        String(tp.name || 'Telegram-Proxy'),
-        String(tp.secret),
-        String(tp.status || 'active'),
-        tp.enabled ? 1 : 0,
-        Number(tp.last_seen || tp.lastSeen || 0),
-        Number(tp.traffic_total || tp.trafficBytes || 0),
-        Number(tp.req_total || tp.requestsTotal || 0),
-        Number(tp.req_today || tp.requestsToday || 0),
-        String(tp.req_date || ''),
-        Number(tp.created_at || now),
-        now
-      ).run();
-      telegramProxyRestored = true;
-    } catch (_e) {}
+  if (payload.telegramProxy && typeof payload.telegramProxy === 'object' && payload.telegramProxy.secret) {
+    if (d1Ready) {
+      try {
+        const tp = payload.telegramProxy;
+        const now = Date.now();
+        await safeBind(
+          detectedD1.db.prepare(
+            `INSERT OR REPLACE INTO telegram_proxy (
+              id, name, secret, status, enabled, last_seen,
+              traffic_total, req_total, req_today, req_date, created_at, updated_at
+            ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ),
+          String(tp.name || 'Telegram-Proxy'),
+          String(tp.secret),
+          String(tp.status || 'active'),
+          tp.enabled ? 1 : 0,
+          Number(tp.last_seen || tp.lastSeen || 0),
+          Number(tp.traffic_total || tp.trafficBytes || 0),
+          Number(tp.req_total || tp.requestsTotal || 0),
+          Number(tp.req_today || tp.requestsToday || 0),
+          String(tp.req_date || ''),
+          Number(tp.created_at || now),
+          now
+        ).run();
+        telegramProxyRestored = true;
+      } catch (err) {
+        failures.push('پروکسی تلگرام: ' + (err?.message || String(err)));
+      }
+    } else {
+      failures.push('پروکسی تلگرام: D1 در دسترس نیست');
+    }
   }
 
-  await addAuditLog(env, 'بازیابی بکاپ پنل', `${usersRestored} کاربر بازیابی شد (${mode})`, clientIp);
+  await addAuditLog(
+    env,
+    'بازیابی بکاپ پنل',
+    `${usersRestored} کاربر بازیابی شد${usersFailed ? ` · ${usersFailed} ناموفق` : ''} (${mode})`,
+    clientIp
+  );
+
+  if (failures.length) {
+    throw new Error('بازیابی کامل نشد — ' + failures.slice(0, 3).join(' | ') + (failures.length > 3 ? ' و ...' : ''));
+  }
+
   return {
     success: true,
     mode,
@@ -20283,7 +20478,7 @@ ${PWA_HEAD_TAGS}
     background: linear-gradient(135deg, rgba(var(--neon-rgb), 0.2), rgba(var(--info-rgb), 0.12));
     box-shadow: 0 10px 24px -10px rgba(var(--neon-rgb), 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.14);
   }
-  .btn.tg-proxy-btn, [data-act="open-tg-proxy"] {
+  .btn.tg-proxy-btn, .btn[data-act="open-tg-proxy"] {
     background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(var(--neon-rgb), 0.14));
     border-color: rgba(56, 189, 248, 0.48);
     color: var(--text);
@@ -20291,7 +20486,7 @@ ${PWA_HEAD_TAGS}
     font-size: 0.71rem;
     padding: 6px 11px;
   }
-  .btn.tg-proxy-btn .mi, [data-act="open-tg-proxy"] .mi {
+  .btn.tg-proxy-btn .mi, .btn[data-act="open-tg-proxy"] .mi {
     color: #38bdf8;
     filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.65));
   }
@@ -20367,6 +20562,8 @@ ${PWA_HEAD_TAGS}
   .preset-orb-btn.orb-iran-heavy { --orb-color: #c084fc; --orb-rgb: 192, 132, 252; animation-delay: 0.7s; }
   .preset-orb-btn.orb-multi { --orb-color: #fbbf24; --orb-rgb: 251, 191, 36; animation-delay: 1.05s; }
   .preset-orb-btn.orb-intl { --orb-color: #fb7185; --orb-rgb: 251, 113, 133; animation-delay: 1.4s; }
+  /* دکمهٔ گرد وب‌پروکسی تلگرام، هم‌اندازه و هم‌سبک دکمه‌های ساخت سریع کاربر */
+  .preset-orb-btn.orb-tg-proxy { --orb-color: #38bdf8; --orb-rgb: 56, 189, 248; animation-delay: 1.75s; }
   body.light-mode .preset-orb-btn {
     background: radial-gradient(circle at 32% 28%, #ffffff, rgba(var(--orb-rgb), 0.28) 70%, rgba(var(--orb-rgb), 0.45));
   }
@@ -20556,6 +20753,64 @@ ${PWA_HEAD_TAGS}
   #helpModal .help-foot { padding: 8px 12px; gap: 8px; }
   #helpModal .help-foot .btn { font-size: 0.7rem; padding: 6px 10px; }
 
+  /* پنجرهٔ بکاپ: فشرده، با تایپوگرافی کوچک‌تر تا روی موبایل در یک صفحه دیده شود */
+  #backupModal .modal-card {
+    width: min(760px, 100%);
+    max-height: min(92vh, 860px);
+    display: flex;
+    flex-direction: column;
+  }
+  #backupModal .modal-head { padding: 10px 14px; }
+  #backupModal .modal-head b { font-size: 0.82rem; gap: 6px; }
+  #backupModal .modal-head b .mi { width: 17px; height: 17px; }
+  #backupModal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  #backupModal .card { padding: 10px 12px; border-radius: 12px; }
+  #backupModal .card h3 { font-size: 0.76rem; margin-bottom: 6px; gap: 6px; }
+  #backupModal .card h3 .mi { width: 15px; height: 15px; }
+  #backupModal .help-lead { font-size: 0.7rem; line-height: 1.75; margin-bottom: 6px; }
+  #backupModal code { font-size: 0.66rem; }
+  #backupModal .btn { font-size: 0.68rem; padding: 6px 10px; }
+  #backupModal .btn .mi { width: 14px; height: 14px; }
+  #backupModal .backup-file-box { padding: 8px 10px; gap: 6px; }
+  #backupModal .backup-file-box input[type="file"] { font-size: 0.68rem; }
+  #backupModal .form-grid { grid-template-columns: 1fr; gap: 6px; }
+  #backupModal .field label { font-size: 0.68rem; }
+  #backupModal .mili-select-btn { font-size: 0.7rem; padding: 6px 9px; }
+  #backupModal .modal-foot { padding: 8px 12px; }
+
+  /* تب‌های پنجرهٔ ساخت/ویرایش کاربر: هم‌اندازه، ثابت (فریز) و بدون اسکرول افقی */
+  #createModal .form-tabs {
+    display: grid;
+    flex: none;
+    grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+    gap: 5px;
+    overflow: visible;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: var(--bg-soft);
+    box-shadow: 0 8px 18px -14px rgba(0, 0, 0, 0.9);
+  }
+  #createModal .ftab {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.3;
+    height: 38px;
+    padding: 4px 6px;
+    overflow: hidden;
+  }
+
   @media (max-width: 640px) {
     .modal {
       padding: 10px !important;
@@ -20600,6 +20855,54 @@ ${PWA_HEAD_TAGS}
     #helpModal .help-card h4 { font-size: 0.74rem !important; }
     #helpModal .help-card ul, #helpModal .help-card ol { font-size: 0.69rem !important; line-height: 1.68 !important; }
     .preset-orb-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+
+    /* راهنما و بکاپ در موبایل: فونت ریزتر و استفاده از تمام ارتفاع صفحه */
+    #helpModal .help-modal { max-height: calc(100dvh - 24px) !important; }
+    #helpModal .modal-head { padding: 8px 10px !important; }
+    #helpModal .modal-head b { font-size: 0.76rem !important; }
+    #helpModal .modal-head .icon-btn { width: 30px; height: 30px; }
+    #helpModal .help-tabs { padding: 6px 8px 2px !important; gap: 4px !important; }
+    #helpModal .help-tab { font-size: 0.62rem !important; padding: 4px 8px !important; }
+    #helpModal .help-body { padding: 8px 10px 6px !important; }
+    #helpModal .help-lead { font-size: 0.66rem !important; line-height: 1.65 !important; margin-bottom: 6px !important; }
+    #helpModal .help-grid { gap: 6px !important; }
+    #helpModal .help-card { padding: 7px 9px !important; border-radius: 10px !important; }
+    #helpModal .help-card h4 { font-size: 0.68rem !important; margin-bottom: 4px !important; gap: 4px !important; }
+    #helpModal .help-card h4 .mi { width: 13px; height: 13px; }
+    #helpModal .help-card ul, #helpModal .help-card ol { font-size: 0.63rem !important; line-height: 1.6 !important; padding-inline-start: 13px !important; }
+    #helpModal .help-card li { margin-bottom: 2px; }
+    #helpModal .help-note { font-size: 0.63rem !important; line-height: 1.6 !important; padding: 6px 8px !important; margin-top: 6px !important; }
+    #helpModal .help-kbd { font-size: 0.6rem !important; padding: 0 4px; }
+    #helpModal .help-foot { padding: 6px 10px !important; gap: 6px !important; }
+    #helpModal .help-foot .btn { font-size: 0.64rem !important; padding: 5px 8px !important; }
+    #helpModal .help-foot .help-check { font-size: 0.62rem !important; }
+
+    #backupModal .modal-card {
+      width: min(100%, calc(100vw - 20px)) !important;
+      max-width: calc(100vw - 20px) !important;
+      max-height: calc(100dvh - 24px) !important;
+    }
+    #backupModal .modal-head { padding: 8px 10px !important; }
+    #backupModal .modal-head b { font-size: 0.74rem !important; gap: 5px !important; }
+    #backupModal .modal-head .icon-btn { width: 30px; height: 30px; }
+    #backupModal .modal-body { padding: 8px 9px !important; gap: 6px !important; }
+    #backupModal .card { padding: 8px 9px !important; border-radius: 11px !important; }
+    #backupModal .card h3 { font-size: 0.69rem !important; margin-bottom: 4px !important; gap: 5px !important; }
+    #backupModal .card h3 .mi { width: 13px; height: 13px; }
+    #backupModal .help-lead { font-size: 0.62rem !important; line-height: 1.6 !important; margin-bottom: 5px !important; }
+    #backupModal code { font-size: 0.58rem !important; }
+    #backupModal .btn { font-size: 0.62rem !important; padding: 5px 8px !important; }
+    #backupModal .btn .mi { width: 13px; height: 13px; }
+    #backupModal .toolbar { gap: 5px !important; }
+    #backupModal .backup-file-box { padding: 6px 8px !important; gap: 5px !important; }
+    #backupModal .backup-file-box input[type="file"] { font-size: 0.6rem !important; }
+    #backupModal .field label { font-size: 0.62rem !important; }
+    #backupModal .mili-select-btn { font-size: 0.64rem !important; padding: 5px 8px !important; }
+    #backupModal .modal-foot { padding: 6px 9px !important; }
+
+    #createModal .form-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; padding: 6px 8px !important; gap: 4px !important; }
+    #createModal .ftab { font-size: 0.62rem !important; padding: 3px 4px !important; height: 34px !important; }
+    #createModal .ftab .mi { width: 13px; height: 13px; }
   }
 
 
@@ -20760,18 +21063,17 @@ ${PWA_HEAD_TAGS}
           <span class="dots"><i></i><i></i><i></i></span>
           <div class="window-title">${icon('users')} <span data-i18n="panel.users">کاربران</span> <span class="window-sub" data-i18n="panel.usersSub">مدیریت اشتراک و محدودیت (حداکثر ${MAX_USERS_LIMIT} کاربر)</span></div>
           <div class="spacer"></div>
-          <button class="btn sm" type="button" data-act="open-backup">${icon('database')} <span>بکاپ</span></button>
-          <button class="btn sm tg-proxy-btn" type="button" data-act="open-tg-proxy">${icon('telegram')} <span>پروکسی تلگرام</span></button>
           <button class="btn sm ghost" type="button" data-act="reload-users">${icon('refresh')} <span data-i18n="btn.reload">بروزرسانی</span></button>
           <button class="btn sm primary" type="button" data-act="open-create">${icon('plus')} <span data-i18n="btn.createUser">ایجاد کاربر</span></button>
         </div>
         <div class="window-body">
           <div class="quick-orb-bar" aria-label="ساخت سریع کاربر با تنظیمات آماده">
-            <button class="preset-orb-btn orb-iran-fast" type="button" data-act="quick-preset-user" data-preset="iran-fast" title="ساخت سریع کاربر: ایران — سریع و ضد فیلتر" aria-label="ایران سریع">${icon('bolt')}</button>
-            <button class="preset-orb-btn orb-pages-iran" type="button" data-act="quick-preset-user" data-preset="pages-iran" title="ساخت سریع کاربر: مخصوص دامنه Pages.dev ضد فیلتر" aria-label="Pages ضد فیلتر">${icon('shield')}</button>
-            <button class="preset-orb-btn orb-iran-heavy" type="button" data-act="quick-preset-user" data-preset="iran-heavy" title="ساخت سریع کاربر: اینترنت شدیداً محدود و ملی" aria-label="اینترنت محدود">${icon('lock')}</button>
-            <button class="preset-orb-btn orb-multi" type="button" data-act="quick-preset-user" data-preset="multi-location" title="ساخت سریع کاربر: چندلوکیشن ۶ کشور + WARP" aria-label="چندلوکیشن">${icon('globe')}</button>
-            <button class="preset-orb-btn orb-intl" type="button" data-act="quick-preset-user" data-preset="international" title="ساخت سریع کاربر: بین‌المللی سرعت خام حداکثری" aria-label="بین‌المللی">${icon('signal')}</button>
+            <button class="preset-orb-btn orb-iran-fast" type="button" data-act="quick-preset-user" data-preset="iran-fast" title="ساخت سریع کاربر: ایران سریع — فرگمنت MCI، خروجی آلمان، ۳ دستگاه" aria-label="ایران سریع">${icon('bolt')}</button>
+            <button class="preset-orb-btn orb-pages-iran" type="button" data-act="quick-preset-user" data-preset="pages-iran" title="ساخت سریع کاربر: Pages.dev — xHTTP + ECH، فرگمنت Anti-DPI، خروجی هلند" aria-label="Pages ضد فیلتر">${icon('shield')}</button>
+            <button class="preset-orb-btn orb-iran-heavy" type="button" data-act="quick-preset-user" data-preset="iran-heavy" title="ساخت سریع کاربر: مصرف سنگین — VLESS + Trojan، فرگمنت ایرانسل، خروجی ترکیه" aria-label="مصرف سنگین">${icon('lock')}</button>
+            <button class="preset-orb-btn orb-multi" type="button" data-act="quick-preset-user" data-preset="multi-location" title="ساخت سریع کاربر: چندلوکیشن — ۶ کشور از مخزن، VLESS + Trojan + SS، WARP" aria-label="چندلوکیشن">${icon('globe')}</button>
+            <button class="preset-orb-btn orb-intl" type="button" data-act="quick-preset-user" data-preset="international" title="ساخت سریع کاربر: بین‌المللی — بدون فرگمنت، WARP MASQUE، خروجی مستقیم" aria-label="بین‌المللی">${icon('signal')}</button>
+            <button class="preset-orb-btn orb-tg-proxy" type="button" data-act="open-tg-proxy" title="مدیریت پروکسی تلگرام (وب‌پروکسی)" aria-label="پروکسی تلگرام">${icon('telegram')}</button>
           </div>
           <div class="user-grid" id="usersGrid"></div>
           <div class="empty" id="usersEmpty" style="display:none;">هنوز کاربری ساخته نشده است.</div>
@@ -22963,6 +23265,25 @@ ${PWA_HEAD_TAGS}
     var presets = INITIAL_DATA.presets || {};
     var p = presets[presetId] || presets['iran-fast'] || {};
     var baseCfg = Object.assign({}, INITIAL_DATA.defaults || {}, state.config || {}, (p && p.configOverrides) || {});
+    // هر دکمهٔ ساخت آماده، آی‌پی‌های اختصاصی خودش را از مخزن داخلی پنل برمی‌دارد؛
+    // بنابراین همهٔ کاربران آماده آدرس دستی از مخزن دارند و تنظیماتشان یکتا می‌ماند.
+    var pool = INITIAL_DATA.ipPool || [];
+    var poolNames = INITIAL_DATA.ipPoolCountryNames || {};
+    var poolCountries = String(p.poolCountries || '').toUpperCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    var poolSource = poolCountries.length
+      ? pool.filter(function(item) { return poolCountries.indexOf(String(item.cc || '').toUpperCase()) !== -1; })
+      : pool.slice();
+    if (!poolSource.length) poolSource = pool.slice();
+    var picked = poolSource.slice();
+    for (var pi = picked.length - 1; pi > 0; pi--) {
+      var pj = Math.floor(Math.random() * (pi + 1));
+      var ptmp = picked[pi]; picked[pi] = picked[pj]; picked[pj] = ptmp;
+    }
+    picked = picked.slice(0, Math.min(Math.max(1, parseInt(p.poolCount, 10) || 6), picked.length));
+    if (picked.length) {
+      baseCfg.yx = picked.map(function(item) { return item.ip + ':443#' + (poolNames[item.cc] || item.cc); }).join(',');
+      baseCfg.yxby = 'no';
+    }
     var shortTag = {
       'iran-fast': 'fast',
       'pages-iran': 'pages',
@@ -22980,9 +23301,11 @@ ${PWA_HEAD_TAGS}
       username: candidateName,
       preset: presetId || 'iran-fast',
       note: (p && p.title) ? p.title : '',
-      dataLimitGb: 0,
-      expireDays: 0,
-      ipLimit: 50,
+      dataLimitGb: Math.max(0, Number(p.dataLimitGb) || 0),
+      expireDays: Math.max(0, parseInt(p.expireDays, 10) || 0),
+      ipLimit: Math.max(1, parseInt(p.ipLimit, 10) || 50),
+      startOnFirstUse: p.startOnFirstUse !== false,
+      nodeScope: p.nodeScope || 'all',
       config: baseCfg
     };
     api('/api/users', { method: 'POST', body: JSON.stringify(payload) })

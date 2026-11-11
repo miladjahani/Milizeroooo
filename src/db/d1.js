@@ -11,7 +11,7 @@ import {
   getEnvConfigSnapshot,
   normalizeEffectiveConfig
 } from '../config/defaults.js';
-import { buildUserDefaultConfig } from '../config/presets.js';
+import { buildUserDefaultConfig, USER_PRESETS } from '../config/presets.js';
 import { generateShortId, generateUuidV4, isValidUuid, sha256Hex, timingSafeEqualStr } from '../core/utils.js';
 
 // حافظه کش داخلی هر Isolate جهت کارکرد بدون وقفه و حداکثر سرعت
@@ -276,7 +276,15 @@ export async function ensureD1Schema(env = {}, force = false) {
   }
 }
 
+// نسخهٔ اسکیما: با هر تغییر ستون/جدول یک عدد بالا می‌رود تا دیتابیس‌های قدیمی
+// که کاربر دارند هم مهاجرت شوند. قبلاً مسیر سریع هنگام وجود کاربر، مهاجرت را
+// کامل رد می‌کرد و ستون‌های تازه در D1 ساخته نمی‌شدند (باگ ذخیره‌نشدن).
+const D1_SCHEMA_VERSION = '4';
+
 async function _runEnsureD1Schema(env, db, bindingName, force) {
+  let hasUsers = false;
+  let schemaVersion = '';
+
   if (!force) {
     try {
       const [usersRes, cfgRes] = await Promise.all([
@@ -284,30 +292,38 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
         db.prepare(`SELECT key, value FROM system_config`).all()
       ]);
       const userRows = usersRes?.results || [];
+      const cfgRows = cfgRes?.results || [];
+      const now = Date.now();
+      const stored = {};
+      for (const r of cfgRows) {
+        if (!r || !r.key) continue;
+        if (r.key === 'admin_path' && r.value) memoryStore.adminPath = String(r.value).trim().toLowerCase();
+        if (r.key === 'admin_password_hash' && r.value) memoryStore.adminPasswordHash = String(r.value).trim();
+        if (r.key === 'schema_version' && r.value) schemaVersion = String(r.value).trim();
+        if (r.key === 'cf_token' || r.key === 'schema_version' || r.key.startsWith('secret_')) continue;
+        stored[r.key] = r.value;
+      }
+      if (Object.keys(stored).length) {
+        memoryStore.globalConfig = { ...memoryStore.globalConfig, ...stored };
+      }
       if (userRows.length > 0) {
-        const now = Date.now();
         memoryStore.users.clear();
         for (const r of userRows) {
           const u = mapUserRow(r);
           if (u) memoryStore.users.set(u.id, u);
         }
         memoryStore.lastUsersSyncAt = now;
-        const cfgRows = cfgRes?.results || [];
-        const stored = {};
-        for (const r of cfgRows) {
-          if (!r || !r.key) continue;
-          if (r.key === 'admin_path' && r.value) memoryStore.adminPath = String(r.value).trim().toLowerCase();
-          if (r.key === 'admin_password_hash' && r.value) memoryStore.adminPasswordHash = String(r.value).trim();
-          if (r.key === 'cf_token' || r.key.startsWith('secret_')) continue;
-          stored[r.key] = r.value;
-        }
-        memoryStore.globalConfig = { ...memoryStore.globalConfig, ...stored };
-        memoryStore.lastSyncAt = now;
-        memoryStore.d1SchemaReady = true;
-        memoryStore.d1Error = null;
-        return { d1Enabled: true, bindingName, migrated: true, error: null };
+        hasUsers = true;
       }
+      memoryStore.lastSyncAt = now;
     } catch (_fastErr) {}
+  }
+
+  // فقط وقتی نسخهٔ اسکیما تأیید شده باشد از مهاجرت عبور می‌کنیم؛ دیتابیس قدیمی
+  // یا دیتابیسی که نسخه ندارد یک‌بار کامل مهاجرت می‌شود.
+  if (hasUsers && schemaVersion === D1_SCHEMA_VERSION) {
+    memoryStore.d1SchemaReady = true;
+    return { d1Enabled: true, bindingName, migrated: true, error: memoryStore.d1Error };
   }
 
   const ddlStatements = [
@@ -389,10 +405,12 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
   // هر دستور DDL جداگانه اجرا می‌شود؛ یک جدول مشکل‌دار نباید کل اسکیما (و در
   // نتیجه ذخیرهٔ تنظیمات در D1) را از کار بیندازد.
   const schemaErrors = [];
+  let migrationComplete = true;
   for (const sql of ddlStatements) {
     try {
       await db.prepare(sql).run();
     } catch (err) {
+      migrationComplete = false;
       schemaErrors.push(err?.message || String(err));
     }
   }
@@ -400,13 +418,19 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
   // جدول‌هایی که با نسخهٔ قدیمی ساخته شده‌اند ستون‌های تازه را ندارند و همین
   // باعث می‌شد INSERT در D1 خطا بدهد و تنظیمات فقط در حافظه بماند.
   try {
-    schemaErrors.push(...await addMissingColumns(db, 'users', USER_TABLE_COLUMNS));
+    const userColumnErrors = await addMissingColumns(db, 'users', USER_TABLE_COLUMNS);
+    if (userColumnErrors.length) migrationComplete = false;
+    schemaErrors.push(...userColumnErrors);
   } catch (err) {
+    migrationComplete = false;
     schemaErrors.push(err?.message || String(err));
   }
   try {
-    schemaErrors.push(...await addMissingColumns(db, 'system_config', SYSTEM_CONFIG_COLUMNS));
+    const configColumnErrors = await addMissingColumns(db, 'system_config', SYSTEM_CONFIG_COLUMNS);
+    if (configColumnErrors.length) migrationComplete = false;
+    schemaErrors.push(...configColumnErrors);
   } catch (err) {
+    migrationComplete = false;
     schemaErrors.push(err?.message || String(err));
   }
 
@@ -434,6 +458,25 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
 
   try {
     memoryStore.d1SchemaReady = true;
+
+    // ثبت نسخهٔ اسکیما تا درخواست‌های بعدی از مهاجرت دوباره صرف‌نظر کنند.
+    // اگر مهاجرت کامل نشده باشد نسخه ثبت نمی‌شود تا در ایزولهٔ بعدی دوباره تلاش شود.
+    if (migrationComplete) {
+      try {
+        await safeBind(
+          db.prepare(
+            `INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+          ),
+          'schema_version',
+          D1_SCHEMA_VERSION,
+          Date.now()
+        ).run();
+      } catch (err) {
+        schemaErrors.push('schema_version: ' + (err?.message || String(err)));
+      }
+    }
+
     memoryStore.d1Error = schemaErrors.filter(Boolean).join(' | ') || null;
 
     // بررسی وجود کاربر اولیه
@@ -699,7 +742,7 @@ export async function loadGlobalConfig(env = {}, force = false) {
         if (!r || !r.key) continue;
         if (r.key === 'admin_path' && r.value) memoryStore.adminPath = String(r.value).trim().toLowerCase();
         if (r.key === 'admin_password_hash' && r.value) memoryStore.adminPasswordHash = String(r.value).trim();
-        if (r.key === 'cf_token' || r.key.startsWith('secret_')) continue;
+        if (r.key === 'cf_token' || r.key === 'schema_version' || r.key.startsWith('secret_')) continue;
         stored[r.key] = r.value;
       }
     } catch (_e) {}
@@ -899,6 +942,7 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
   const now = Date.now();
 
   const presetId = payload.preset || 'iran-fast';
+  const presetDef = USER_PRESETS[presetId] || {};
   const rawName = String(payload.username || payload.name || '').trim();
   const id = payload.id && String(payload.id).trim() ? String(payload.id).trim() : generateShortId('mili');
   const username = rawName || id;
@@ -957,12 +1001,16 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
     }
   );
 
-  const dataLimitGb = Math.max(0, Number(payload.dataLimitGb ?? 0) || 0);
-  const expireDays = Math.max(0, parseInt(payload.expireDays ?? 0, 10) || 0);
-  const startOnFirstUse = payload.startOnFirstUse !== undefined ? Boolean(payload.startOnFirstUse) : true;
+  // مقادیر ارسالی کاربر اولویت دارند؛ در نبود آن‌ها تنظیمات اختصاصی همان پریست
+  // اعمال می‌شود تا هر دکمهٔ ساخت سریع، سهمیه و محدودیت منحصربه‌فرد خودش را داشته باشد.
+  const dataLimitGb = Math.max(0, Number(payload.dataLimitGb ?? presetDef.dataLimitGb ?? 0) || 0);
+  const expireDays = Math.max(0, parseInt(payload.expireDays ?? presetDef.expireDays ?? 0, 10) || 0);
+  const startOnFirstUse = payload.startOnFirstUse !== undefined
+    ? Boolean(payload.startOnFirstUse)
+    : presetDef.startOnFirstUse !== false;
   const expireAt = !startOnFirstUse && expireDays > 0 ? now + expireDays * 86400 * 1000 : 0;
-  const ipLimit = Math.max(1, parseInt(payload.ipLimit ?? 50, 10) || 50);
-  const nodeScope = String(payload.nodeScope || 'all');
+  const ipLimit = Math.max(1, parseInt(payload.ipLimit ?? presetDef.ipLimit ?? 50, 10) || 50);
+  const nodeScope = String(payload.nodeScope || presetDef.nodeScope || 'all');
   const enabled = payload.enabled !== undefined ? Boolean(payload.enabled) : true;
   const note = String(payload.note || '');
 
@@ -1444,28 +1492,52 @@ export async function importFullBackup(env = {}, payload = {}, clientIp = '') {
   if (!payload || typeof payload !== 'object') {
     throw new Error('ساختار فایل بکاپ نامعتبر است');
   }
-  await ensureD1Schema(env);
-  const mode = payload.mode === 'replace' ? 'replace' : 'merge';
+  const schema = await ensureD1Schema(env);
   const detectedD1 = detectD1Binding(env);
+  const d1Ready = Boolean(detectedD1 && schema.d1Enabled && memoryStore.d1SchemaReady);
+  const mode = payload.mode === 'replace' ? 'replace' : 'merge';
+  const failures = [];
 
   let configRestored = false;
   if (payload.globalConfig && typeof payload.globalConfig === 'object') {
     await saveGlobalConfig(env, payload.globalConfig);
-    configRestored = true;
+    if (d1Ready) {
+      const keys = Object.keys(payload.globalConfig).filter(key => {
+        const value = payload.globalConfig[key];
+        return value !== '' && value !== null && value !== undefined;
+      });
+      const verification = await verifyConfigInD1(env, keys);
+      if (verification.error || verification.missing.length) {
+        failures.push('تنظیمات: ' + (verification.error || 'ذخیره نشد: ' + verification.missing.join(', ')));
+      } else {
+        configRestored = true;
+      }
+    } else {
+      configRestored = true;
+    }
   }
 
   let usersRestored = 0;
+  let usersFailed = 0;
   if (Array.isArray(payload.users)) {
+    let canReplace = true;
     if (mode === 'replace' && payload.users.length > 0) {
-      memoryStore.users.clear();
-      memoryStore.pendingUserFlush.clear();
-      if (detectedD1 && memoryStore.d1SchemaReady) {
+      if (d1Ready) {
         try {
           const current = await detectedD1.db.prepare('SELECT id FROM users').all();
           for (const r of (current?.results || [])) {
             await safeBind(detectedD1.db.prepare('DELETE FROM users WHERE id = ?'), r.id).run();
           }
-        } catch (_e) {}
+          const check = await detectedD1.db.prepare('SELECT COUNT(*) as cnt FROM users').first();
+          if (Number(check?.cnt || 0) > 0) throw new Error('ردیف‌های قبلی از D1 حذف نشدند');
+        } catch (err) {
+          canReplace = false;
+          failures.push('حذف کاربران قبلی: ' + (err?.message || String(err)));
+        }
+      }
+      if (canReplace) {
+        memoryStore.users.clear();
+        memoryStore.pendingUserFlush.clear();
       }
     }
 
@@ -1473,9 +1545,13 @@ export async function importFullBackup(env = {}, payload = {}, clientIp = '') {
     const now = Date.now();
     for (const u of incomingUsers) {
       if (!u || typeof u !== 'object') continue;
-      if (memoryStore.users.size >= MAX_USERS_LIMIT && !memoryStore.users.has(u.id)) continue;
       const id = String(u.id || generateShortId('mili')).trim();
       const username = String(u.username || id).trim();
+      if (memoryStore.users.size >= MAX_USERS_LIMIT && !memoryStore.users.has(id)) {
+        usersFailed++;
+        failures.push(`کاربر «${username}»: سقف ${MAX_USERS_LIMIT} کاربر تکمیل است`);
+        continue;
+      }
       const uuid = isValidUuid(u.uuid) ? String(u.uuid).trim().toLowerCase() : generateUuidV4();
       const subNodeCount = Number(u.subNodeCount ?? 50) || 50;
       const status = String(u.status || 'active');
@@ -1487,71 +1563,123 @@ export async function importFullBackup(env = {}, payload = {}, clientIp = '') {
       const expireDays = Math.max(0, Number(u.expireDays) || 0);
       const expireAt = Math.max(0, Number(u.expireAt) || 0);
       const startOnFirstUse = u.startOnFirstUse !== false;
+      const firstConnectedAt = Math.max(0, Number(u.firstConnectedAt) || 0);
       const ipLimit = Math.max(1, Number(u.ipLimit) || 50);
       const nodeScope = String(u.nodeScope || 'all');
       const preset = String(u.preset || 'iran-fast');
+      const note = String(u.note || '');
       const config = normalizeEffectiveConfig(u.config || {});
+      const createdAt = Number(u.createdAt || now);
       const userObj = {
         id, username, uuid, subNodeCount, status, enabled,
         dataLimitGb, usedBytes, lifetimeBytes, requestCount,
-        expireDays, expireAt, startOnFirstUse, firstConnectedAt: Number(u.firstConnectedAt || 0),
-        ipLimit, nodeScope, preset, note: String(u.note || ''),
-        config, createdAt: Number(u.createdAt || now), updatedAt: now
+        expireDays, expireAt, startOnFirstUse, firstConnectedAt,
+        ipLimit, nodeScope, preset, note,
+        config, createdAt, updatedAt: now
       };
-      memoryStore.users.set(id, userObj);
-      if (detectedD1 && memoryStore.d1SchemaReady) {
-        try {
-          await safeBind(
-            detectedD1.db.prepare(
-              `INSERT OR REPLACE INTO users (
-                id, username, uuid, sub_node_count, status, enabled,
-                data_limit_gb, used_bytes, lifetime_bytes, request_count,
-                expire_days, expire_at, start_on_first_use, ip_limit,
-                node_scope, preset, config_json, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            ),
-            id, username, uuid, subNodeCount, status, enabled ? 1 : 0,
-            dataLimitGb, usedBytes, lifetimeBytes, requestCount,
-            expireDays, expireAt, startOnFirstUse ? 1 : 0, ipLimit,
-            nodeScope, preset, JSON.stringify({ ...config, __note: userObj.note }),
-            userObj.createdAt, now
-          ).run();
-        } catch (_e) {}
+
+      if (!d1Ready) {
+        // حالت بدون D1: فقط حافظهٔ همین ایزوله در دسترس است.
+        memoryStore.users.set(id, userObj);
+        usersRestored++;
+        continue;
       }
-      usersRestored++;
+
+      try {
+        await safeBind(
+          detectedD1.db.prepare(
+            `INSERT INTO users (
+              id, username, uuid, sub_node_count, status, enabled,
+              data_limit_gb, used_bytes, lifetime_bytes, request_count,
+              expire_days, expire_at, start_on_first_use, ip_limit,
+              node_scope, preset, config_json, note, first_connected_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              username = excluded.username,
+              uuid = excluded.uuid,
+              sub_node_count = excluded.sub_node_count,
+              status = excluded.status,
+              enabled = excluded.enabled,
+              data_limit_gb = excluded.data_limit_gb,
+              used_bytes = excluded.used_bytes,
+              lifetime_bytes = excluded.lifetime_bytes,
+              request_count = excluded.request_count,
+              expire_days = excluded.expire_days,
+              expire_at = excluded.expire_at,
+              start_on_first_use = excluded.start_on_first_use,
+              ip_limit = excluded.ip_limit,
+              node_scope = excluded.node_scope,
+              preset = excluded.preset,
+              config_json = excluded.config_json,
+              note = excluded.note,
+              first_connected_at = excluded.first_connected_at,
+              updated_at = excluded.updated_at`
+          ),
+          id, username, uuid, subNodeCount, status, enabled ? 1 : 0,
+          dataLimitGb, usedBytes, lifetimeBytes, requestCount,
+          expireDays, expireAt, startOnFirstUse ? 1 : 0, ipLimit,
+          nodeScope, preset, JSON.stringify(config), note, firstConnectedAt,
+          createdAt, now
+        ).run();
+        // تأیید واقعی نوشتن؛ قبلاً خطاها بی‌صدا رد می‌شدند و پیام «بازیابی شد»
+        // حتی وقتی هیچ ردیفی در D1 ذخیره نشده بود نمایش داده می‌شد.
+        const check = await detectedD1.db.prepare('SELECT id FROM users WHERE id = ?').bind(id).first();
+        if (!check || !check.id) throw new Error('ردیف در D1 پیدا نشد');
+        memoryStore.users.set(id, userObj);
+        usersRestored++;
+      } catch (err) {
+        usersFailed++;
+        failures.push(`کاربر «${username}»: ${err?.message || String(err)}`);
+      }
     }
     memoryStore.lastUsersSyncAt = Date.now();
   }
 
   let telegramProxyRestored = false;
-  if (payload.telegramProxy && typeof payload.telegramProxy === 'object' && payload.telegramProxy.secret && detectedD1 && memoryStore.d1SchemaReady) {
-    try {
-      const tp = payload.telegramProxy;
-      const now = Date.now();
-      await safeBind(
-        detectedD1.db.prepare(
-          `INSERT OR REPLACE INTO telegram_proxy (
-            id, name, secret, status, enabled, last_seen,
-            traffic_total, req_total, req_today, req_date, created_at, updated_at
-          ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ),
-        String(tp.name || 'Telegram-Proxy'),
-        String(tp.secret),
-        String(tp.status || 'active'),
-        tp.enabled ? 1 : 0,
-        Number(tp.last_seen || tp.lastSeen || 0),
-        Number(tp.traffic_total || tp.trafficBytes || 0),
-        Number(tp.req_total || tp.requestsTotal || 0),
-        Number(tp.req_today || tp.requestsToday || 0),
-        String(tp.req_date || ''),
-        Number(tp.created_at || now),
-        now
-      ).run();
-      telegramProxyRestored = true;
-    } catch (_e) {}
+  if (payload.telegramProxy && typeof payload.telegramProxy === 'object' && payload.telegramProxy.secret) {
+    if (d1Ready) {
+      try {
+        const tp = payload.telegramProxy;
+        const now = Date.now();
+        await safeBind(
+          detectedD1.db.prepare(
+            `INSERT OR REPLACE INTO telegram_proxy (
+              id, name, secret, status, enabled, last_seen,
+              traffic_total, req_total, req_today, req_date, created_at, updated_at
+            ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ),
+          String(tp.name || 'Telegram-Proxy'),
+          String(tp.secret),
+          String(tp.status || 'active'),
+          tp.enabled ? 1 : 0,
+          Number(tp.last_seen || tp.lastSeen || 0),
+          Number(tp.traffic_total || tp.trafficBytes || 0),
+          Number(tp.req_total || tp.requestsTotal || 0),
+          Number(tp.req_today || tp.requestsToday || 0),
+          String(tp.req_date || ''),
+          Number(tp.created_at || now),
+          now
+        ).run();
+        telegramProxyRestored = true;
+      } catch (err) {
+        failures.push('پروکسی تلگرام: ' + (err?.message || String(err)));
+      }
+    } else {
+      failures.push('پروکسی تلگرام: D1 در دسترس نیست');
+    }
   }
 
-  await addAuditLog(env, 'بازیابی بکاپ پنل', `${usersRestored} کاربر بازیابی شد (${mode})`, clientIp);
+  await addAuditLog(
+    env,
+    'بازیابی بکاپ پنل',
+    `${usersRestored} کاربر بازیابی شد${usersFailed ? ` · ${usersFailed} ناموفق` : ''} (${mode})`,
+    clientIp
+  );
+
+  if (failures.length) {
+    throw new Error('بازیابی کامل نشد — ' + failures.slice(0, 3).join(' | ') + (failures.length > 3 ? ' و ...' : ''));
+  }
+
   return {
     success: true,
     mode,

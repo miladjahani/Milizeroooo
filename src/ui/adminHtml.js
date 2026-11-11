@@ -2862,7 +2862,7 @@ ${PWA_HEAD_TAGS}
     background: linear-gradient(135deg, rgba(var(--neon-rgb), 0.2), rgba(var(--info-rgb), 0.12));
     box-shadow: 0 10px 24px -10px rgba(var(--neon-rgb), 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.14);
   }
-  .btn.tg-proxy-btn, [data-act="open-tg-proxy"] {
+  .btn.tg-proxy-btn, .btn[data-act="open-tg-proxy"] {
     background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(var(--neon-rgb), 0.14));
     border-color: rgba(56, 189, 248, 0.48);
     color: var(--text);
@@ -2870,7 +2870,7 @@ ${PWA_HEAD_TAGS}
     font-size: 0.71rem;
     padding: 6px 11px;
   }
-  .btn.tg-proxy-btn .mi, [data-act="open-tg-proxy"] .mi {
+  .btn.tg-proxy-btn .mi, .btn[data-act="open-tg-proxy"] .mi {
     color: #38bdf8;
     filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.65));
   }
@@ -2946,6 +2946,8 @@ ${PWA_HEAD_TAGS}
   .preset-orb-btn.orb-iran-heavy { --orb-color: #c084fc; --orb-rgb: 192, 132, 252; animation-delay: 0.7s; }
   .preset-orb-btn.orb-multi { --orb-color: #fbbf24; --orb-rgb: 251, 191, 36; animation-delay: 1.05s; }
   .preset-orb-btn.orb-intl { --orb-color: #fb7185; --orb-rgb: 251, 113, 133; animation-delay: 1.4s; }
+  /* دکمهٔ گرد وب‌پروکسی تلگرام، هم‌اندازه و هم‌سبک دکمه‌های ساخت سریع کاربر */
+  .preset-orb-btn.orb-tg-proxy { --orb-color: #38bdf8; --orb-rgb: 56, 189, 248; animation-delay: 1.75s; }
   body.light-mode .preset-orb-btn {
     background: radial-gradient(circle at 32% 28%, #ffffff, rgba(var(--orb-rgb), 0.28) 70%, rgba(var(--orb-rgb), 0.45));
   }
@@ -3135,6 +3137,64 @@ ${PWA_HEAD_TAGS}
   #helpModal .help-foot { padding: 8px 12px; gap: 8px; }
   #helpModal .help-foot .btn { font-size: 0.7rem; padding: 6px 10px; }
 
+  /* پنجرهٔ بکاپ: فشرده، با تایپوگرافی کوچک‌تر تا روی موبایل در یک صفحه دیده شود */
+  #backupModal .modal-card {
+    width: min(760px, 100%);
+    max-height: min(92vh, 860px);
+    display: flex;
+    flex-direction: column;
+  }
+  #backupModal .modal-head { padding: 10px 14px; }
+  #backupModal .modal-head b { font-size: 0.82rem; gap: 6px; }
+  #backupModal .modal-head b .mi { width: 17px; height: 17px; }
+  #backupModal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  #backupModal .card { padding: 10px 12px; border-radius: 12px; }
+  #backupModal .card h3 { font-size: 0.76rem; margin-bottom: 6px; gap: 6px; }
+  #backupModal .card h3 .mi { width: 15px; height: 15px; }
+  #backupModal .help-lead { font-size: 0.7rem; line-height: 1.75; margin-bottom: 6px; }
+  #backupModal code { font-size: 0.66rem; }
+  #backupModal .btn { font-size: 0.68rem; padding: 6px 10px; }
+  #backupModal .btn .mi { width: 14px; height: 14px; }
+  #backupModal .backup-file-box { padding: 8px 10px; gap: 6px; }
+  #backupModal .backup-file-box input[type="file"] { font-size: 0.68rem; }
+  #backupModal .form-grid { grid-template-columns: 1fr; gap: 6px; }
+  #backupModal .field label { font-size: 0.68rem; }
+  #backupModal .mili-select-btn { font-size: 0.7rem; padding: 6px 9px; }
+  #backupModal .modal-foot { padding: 8px 12px; }
+
+  /* تب‌های پنجرهٔ ساخت/ویرایش کاربر: هم‌اندازه، ثابت (فریز) و بدون اسکرول افقی */
+  #createModal .form-tabs {
+    display: grid;
+    flex: none;
+    grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+    gap: 5px;
+    overflow: visible;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: var(--bg-soft);
+    box-shadow: 0 8px 18px -14px rgba(0, 0, 0, 0.9);
+  }
+  #createModal .ftab {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.3;
+    height: 38px;
+    padding: 4px 6px;
+    overflow: hidden;
+  }
+
   @media (max-width: 640px) {
     .modal {
       padding: 10px !important;
@@ -3179,6 +3239,54 @@ ${PWA_HEAD_TAGS}
     #helpModal .help-card h4 { font-size: 0.74rem !important; }
     #helpModal .help-card ul, #helpModal .help-card ol { font-size: 0.69rem !important; line-height: 1.68 !important; }
     .preset-orb-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+
+    /* راهنما و بکاپ در موبایل: فونت ریزتر و استفاده از تمام ارتفاع صفحه */
+    #helpModal .help-modal { max-height: calc(100dvh - 24px) !important; }
+    #helpModal .modal-head { padding: 8px 10px !important; }
+    #helpModal .modal-head b { font-size: 0.76rem !important; }
+    #helpModal .modal-head .icon-btn { width: 30px; height: 30px; }
+    #helpModal .help-tabs { padding: 6px 8px 2px !important; gap: 4px !important; }
+    #helpModal .help-tab { font-size: 0.62rem !important; padding: 4px 8px !important; }
+    #helpModal .help-body { padding: 8px 10px 6px !important; }
+    #helpModal .help-lead { font-size: 0.66rem !important; line-height: 1.65 !important; margin-bottom: 6px !important; }
+    #helpModal .help-grid { gap: 6px !important; }
+    #helpModal .help-card { padding: 7px 9px !important; border-radius: 10px !important; }
+    #helpModal .help-card h4 { font-size: 0.68rem !important; margin-bottom: 4px !important; gap: 4px !important; }
+    #helpModal .help-card h4 .mi { width: 13px; height: 13px; }
+    #helpModal .help-card ul, #helpModal .help-card ol { font-size: 0.63rem !important; line-height: 1.6 !important; padding-inline-start: 13px !important; }
+    #helpModal .help-card li { margin-bottom: 2px; }
+    #helpModal .help-note { font-size: 0.63rem !important; line-height: 1.6 !important; padding: 6px 8px !important; margin-top: 6px !important; }
+    #helpModal .help-kbd { font-size: 0.6rem !important; padding: 0 4px; }
+    #helpModal .help-foot { padding: 6px 10px !important; gap: 6px !important; }
+    #helpModal .help-foot .btn { font-size: 0.64rem !important; padding: 5px 8px !important; }
+    #helpModal .help-foot .help-check { font-size: 0.62rem !important; }
+
+    #backupModal .modal-card {
+      width: min(100%, calc(100vw - 20px)) !important;
+      max-width: calc(100vw - 20px) !important;
+      max-height: calc(100dvh - 24px) !important;
+    }
+    #backupModal .modal-head { padding: 8px 10px !important; }
+    #backupModal .modal-head b { font-size: 0.74rem !important; gap: 5px !important; }
+    #backupModal .modal-head .icon-btn { width: 30px; height: 30px; }
+    #backupModal .modal-body { padding: 8px 9px !important; gap: 6px !important; }
+    #backupModal .card { padding: 8px 9px !important; border-radius: 11px !important; }
+    #backupModal .card h3 { font-size: 0.69rem !important; margin-bottom: 4px !important; gap: 5px !important; }
+    #backupModal .card h3 .mi { width: 13px; height: 13px; }
+    #backupModal .help-lead { font-size: 0.62rem !important; line-height: 1.6 !important; margin-bottom: 5px !important; }
+    #backupModal code { font-size: 0.58rem !important; }
+    #backupModal .btn { font-size: 0.62rem !important; padding: 5px 8px !important; }
+    #backupModal .btn .mi { width: 13px; height: 13px; }
+    #backupModal .toolbar { gap: 5px !important; }
+    #backupModal .backup-file-box { padding: 6px 8px !important; gap: 5px !important; }
+    #backupModal .backup-file-box input[type="file"] { font-size: 0.6rem !important; }
+    #backupModal .field label { font-size: 0.62rem !important; }
+    #backupModal .mili-select-btn { font-size: 0.64rem !important; padding: 5px 8px !important; }
+    #backupModal .modal-foot { padding: 6px 9px !important; }
+
+    #createModal .form-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; padding: 6px 8px !important; gap: 4px !important; }
+    #createModal .ftab { font-size: 0.62rem !important; padding: 3px 4px !important; height: 34px !important; }
+    #createModal .ftab .mi { width: 13px; height: 13px; }
   }
 
 
@@ -3339,18 +3447,17 @@ ${PWA_HEAD_TAGS}
           <span class="dots"><i></i><i></i><i></i></span>
           <div class="window-title">${icon('users')} <span data-i18n="panel.users">کاربران</span> <span class="window-sub" data-i18n="panel.usersSub">مدیریت اشتراک و محدودیت (حداکثر ${MAX_USERS_LIMIT} کاربر)</span></div>
           <div class="spacer"></div>
-          <button class="btn sm" type="button" data-act="open-backup">${icon('database')} <span>بکاپ</span></button>
-          <button class="btn sm tg-proxy-btn" type="button" data-act="open-tg-proxy">${icon('telegram')} <span>پروکسی تلگرام</span></button>
           <button class="btn sm ghost" type="button" data-act="reload-users">${icon('refresh')} <span data-i18n="btn.reload">بروزرسانی</span></button>
           <button class="btn sm primary" type="button" data-act="open-create">${icon('plus')} <span data-i18n="btn.createUser">ایجاد کاربر</span></button>
         </div>
         <div class="window-body">
           <div class="quick-orb-bar" aria-label="ساخت سریع کاربر با تنظیمات آماده">
-            <button class="preset-orb-btn orb-iran-fast" type="button" data-act="quick-preset-user" data-preset="iran-fast" title="ساخت سریع کاربر: ایران — سریع و ضد فیلتر" aria-label="ایران سریع">${icon('bolt')}</button>
-            <button class="preset-orb-btn orb-pages-iran" type="button" data-act="quick-preset-user" data-preset="pages-iran" title="ساخت سریع کاربر: مخصوص دامنه Pages.dev ضد فیلتر" aria-label="Pages ضد فیلتر">${icon('shield')}</button>
-            <button class="preset-orb-btn orb-iran-heavy" type="button" data-act="quick-preset-user" data-preset="iran-heavy" title="ساخت سریع کاربر: اینترنت شدیداً محدود و ملی" aria-label="اینترنت محدود">${icon('lock')}</button>
-            <button class="preset-orb-btn orb-multi" type="button" data-act="quick-preset-user" data-preset="multi-location" title="ساخت سریع کاربر: چندلوکیشن ۶ کشور + WARP" aria-label="چندلوکیشن">${icon('globe')}</button>
-            <button class="preset-orb-btn orb-intl" type="button" data-act="quick-preset-user" data-preset="international" title="ساخت سریع کاربر: بین‌المللی سرعت خام حداکثری" aria-label="بین‌المللی">${icon('signal')}</button>
+            <button class="preset-orb-btn orb-iran-fast" type="button" data-act="quick-preset-user" data-preset="iran-fast" title="ساخت سریع کاربر: ایران سریع — فرگمنت MCI، خروجی آلمان، ۳ دستگاه" aria-label="ایران سریع">${icon('bolt')}</button>
+            <button class="preset-orb-btn orb-pages-iran" type="button" data-act="quick-preset-user" data-preset="pages-iran" title="ساخت سریع کاربر: Pages.dev — xHTTP + ECH، فرگمنت Anti-DPI، خروجی هلند" aria-label="Pages ضد فیلتر">${icon('shield')}</button>
+            <button class="preset-orb-btn orb-iran-heavy" type="button" data-act="quick-preset-user" data-preset="iran-heavy" title="ساخت سریع کاربر: مصرف سنگین — VLESS + Trojan، فرگمنت ایرانسل، خروجی ترکیه" aria-label="مصرف سنگین">${icon('lock')}</button>
+            <button class="preset-orb-btn orb-multi" type="button" data-act="quick-preset-user" data-preset="multi-location" title="ساخت سریع کاربر: چندلوکیشن — ۶ کشور از مخزن، VLESS + Trojan + SS، WARP" aria-label="چندلوکیشن">${icon('globe')}</button>
+            <button class="preset-orb-btn orb-intl" type="button" data-act="quick-preset-user" data-preset="international" title="ساخت سریع کاربر: بین‌المللی — بدون فرگمنت، WARP MASQUE، خروجی مستقیم" aria-label="بین‌المللی">${icon('signal')}</button>
+            <button class="preset-orb-btn orb-tg-proxy" type="button" data-act="open-tg-proxy" title="مدیریت پروکسی تلگرام (وب‌پروکسی)" aria-label="پروکسی تلگرام">${icon('telegram')}</button>
           </div>
           <div class="user-grid" id="usersGrid"></div>
           <div class="empty" id="usersEmpty" style="display:none;">هنوز کاربری ساخته نشده است.</div>
@@ -5542,6 +5649,25 @@ ${PWA_HEAD_TAGS}
     var presets = INITIAL_DATA.presets || {};
     var p = presets[presetId] || presets['iran-fast'] || {};
     var baseCfg = Object.assign({}, INITIAL_DATA.defaults || {}, state.config || {}, (p && p.configOverrides) || {});
+    // هر دکمهٔ ساخت آماده، آی‌پی‌های اختصاصی خودش را از مخزن داخلی پنل برمی‌دارد؛
+    // بنابراین همهٔ کاربران آماده آدرس دستی از مخزن دارند و تنظیماتشان یکتا می‌ماند.
+    var pool = INITIAL_DATA.ipPool || [];
+    var poolNames = INITIAL_DATA.ipPoolCountryNames || {};
+    var poolCountries = String(p.poolCountries || '').toUpperCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    var poolSource = poolCountries.length
+      ? pool.filter(function(item) { return poolCountries.indexOf(String(item.cc || '').toUpperCase()) !== -1; })
+      : pool.slice();
+    if (!poolSource.length) poolSource = pool.slice();
+    var picked = poolSource.slice();
+    for (var pi = picked.length - 1; pi > 0; pi--) {
+      var pj = Math.floor(Math.random() * (pi + 1));
+      var ptmp = picked[pi]; picked[pi] = picked[pj]; picked[pj] = ptmp;
+    }
+    picked = picked.slice(0, Math.min(Math.max(1, parseInt(p.poolCount, 10) || 6), picked.length));
+    if (picked.length) {
+      baseCfg.yx = picked.map(function(item) { return item.ip + ':443#' + (poolNames[item.cc] || item.cc); }).join(',');
+      baseCfg.yxby = 'no';
+    }
     var shortTag = {
       'iran-fast': 'fast',
       'pages-iran': 'pages',
@@ -5559,9 +5685,11 @@ ${PWA_HEAD_TAGS}
       username: candidateName,
       preset: presetId || 'iran-fast',
       note: (p && p.title) ? p.title : '',
-      dataLimitGb: 0,
-      expireDays: 0,
-      ipLimit: 50,
+      dataLimitGb: Math.max(0, Number(p.dataLimitGb) || 0),
+      expireDays: Math.max(0, parseInt(p.expireDays, 10) || 0),
+      ipLimit: Math.max(1, parseInt(p.ipLimit, 10) || 50),
+      startOnFirstUse: p.startOnFirstUse !== false,
+      nodeScope: p.nodeScope || 'all',
       config: baseCfg
     };
     api('/api/users', { method: 'POST', body: JSON.stringify(payload) })

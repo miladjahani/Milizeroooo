@@ -32,6 +32,15 @@ function createMockD1Database() {
   }
 
   return {
+    // D1 واقعی batch دارد؛ این mock هم باید داشته باشد تا ذخیرهٔ تنظیمات
+    // (saveGlobalConfig) در تست‌ها واقعاً نوشته شود.
+    async batch(statements) {
+      const results = [];
+      for (const statement of statements) {
+        results.push(await statement.run());
+      }
+      return results;
+    },
     prepare(sql) {
       const trimmed = sql.trim();
       return {
@@ -547,6 +556,24 @@ async function runTests() {
       authedAdminHtml.includes('data-act="quick-preset-user"') &&
       authedAdminHtml.includes('mili-select-wrap'),
       'تب کاربران باید دکمهٔ پروکسی تلگرام، دکمه‌های گرد نورانی ساخت سریع کاربر و لیست‌های کشویی درون‌برنامه‌ای را داشته باشد'
+    );
+    const usersPanelStart = authedAdminHtml.indexOf('<section class="panel" data-panel="users">');
+    const usersPanelEnd = authedAdminHtml.indexOf('<section class="panel" data-panel="scanner">');
+    const usersPanelHtml = usersPanelStart >= 0 && usersPanelEnd > usersPanelStart
+      ? authedAdminHtml.slice(usersPanelStart, usersPanelEnd)
+      : '';
+    assert.ok(
+      usersPanelHtml.includes('preset-orb-btn orb-tg-proxy') &&
+      usersPanelHtml.includes('data-preset="multi-location"') &&
+      !usersPanelHtml.includes('data-act="open-backup"'),
+      'تب کاربران باید پروکسی تلگرام را به‌صورت دکمهٔ گرد کنار پریست‌ها داشته باشد و دکمهٔ بکاپ از آن حذف شده باشد'
+    );
+    assert.ok(
+      authedAdminHtml.includes('#backupModal .modal-card') &&
+      authedAdminHtml.includes('#helpModal .help-card') &&
+      authedAdminHtml.includes('#createModal .form-tabs') &&
+      authedAdminHtml.includes('grid-template-columns: repeat(3, minmax(0, 1fr))'),
+      'پنجره‌های بکاپ/راهنما باید استایل فشردهٔ موبایل و تب‌های هم‌اندازهٔ فریز داشته باشند'
     );
     console.log('  ✓ تست ۸ (حذف مسیرهای قدیمی پروکسی تلگرام و پاسخ API مدیریت پروکسی WEB): موفق');
     // تست ۹: بررسی دکمه بکاپ در هدرهای پنل ادمین و صفحه وضعیت کاربر + تست Export/Import بکاپ
