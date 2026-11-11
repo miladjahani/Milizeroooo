@@ -87,6 +87,7 @@ export function renderLoginGatewayHtml(options = {}) {
   const initialized = options.initialized !== false;
   const customPath = options.customPath || '';
   const recover = options.recover === true;
+  const storageWarning = options.storageWarning === true;
   const adminHint = String(customPath || '').trim();
 
   return stripEmoji(`<!DOCTYPE html>
@@ -274,6 +275,26 @@ ${PWA_HEAD_TAGS}
     padding: 0;
   }
   .ghost-link:hover { text-decoration: underline; }
+  .storage-warn {
+    margin: 0 0 13px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 98, 98, 0.42);
+    border-radius: 11px;
+    background: rgba(255, 98, 98, 0.09);
+    color: #ffd9d9;
+    font-size: 0.72rem;
+    line-height: 1.75;
+  }
+  .storage-warn b { color: #ff9e9e; }
+  .storage-warn code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #b5ff4d;
+    background: rgba(181, 255, 77, 0.1);
+    padding: 1px 5px;
+    border-radius: 5px;
+  }
+  body.light-mode .storage-warn { border-color: rgba(185, 28, 28, 0.35); background: rgba(254, 226, 226, 0.75); color: #7f1d1d; }
+  body.light-mode .storage-warn b { color: #b91c1c; }
   .err {
     display: none;
     margin: 0 0 12px;
@@ -356,6 +377,8 @@ ${PWA_HEAD_TAGS}
             <div class="brand-sub" id="brandSub"></div>
           </div>
         </div>
+
+        ${storageWarning ? `<div class="storage-warn" role="alert"><b>حالت موقت:</b> دیتابیس D1 به ورکر متصل نیست. رمز عبور، کاربران و نشست بعد از هر رفرش پاک می‌شوند و ساب‌لینک‌ها خطا می‌دهند. در Cloudflare → Worker → Settings → Bindings یک D1 database با نام <code>DB</code> متصل کنید.</div>` : ''}
 
         <div class="err" id="errBox"></div>
 

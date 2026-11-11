@@ -84,7 +84,15 @@ function createMockD1Database() {
           }
           if (s.includes('system_config') && (s.includes('INSERT') || s.includes('REPLACE'))) {
             const rows = getTableRows('system_config');
-            const [k, v] = this._binds;
+            // بعضی INSERTها کلید را به‌صورت literal داخل SQL دارند (مثل
+            // admin_password_hash) و بعضی آن را با bind می‌فرستند.
+            let k, v;
+            if (s.includes("'admin_password_hash'")) {
+              k = 'admin_password_hash';
+              v = this._binds[0];
+            } else {
+              [k, v] = this._binds;
+            }
             const existing = rows.find(r => r.key === k);
             if (existing) existing.value = v;
             else rows.push({ key: k, value: v, updated_at: Date.now() });
@@ -153,7 +161,12 @@ function createMockD1Database() {
         async first(col) {
           const s = this._sql;
           if (s.includes('system_config WHERE key =')) {
-            const k = this._binds[0];
+            // SELECTهایی که کلید را literal دارند (admin_password_hash) bind ندارند.
+            let k = this._binds[0];
+            if (!k) {
+              const literal = s.match(/key\s*=\s*'([^']+)'/i);
+              k = literal ? literal[1] : '';
+            }
             const rows = getTableRows('system_config');
             const hit = rows.find(r => r.key === k);
             if (!hit) return null;
@@ -239,7 +252,16 @@ async function runTests() {
     assert.strictEqual(rootResp.status, 200, 'صفحه اصلی بدون D1 باید با کد 200 باز شود');
     const rootHtml = await rootResp.text();
     assert.ok(rootHtml.includes('MILICONFIG'), 'برند MILICONFIG باید در صفحه ورود وجود داشته باشد');
-    console.log('  ✓ تست ۱ (استقرار دستی بدون D1 و بدون خطای 1101): موفق');
+    assert.ok(rootHtml.includes('حالت موقت'), 'صفحهٔ ورود بدون D1 باید هشدار حالت موقت را نشان دهد');
+    const noD1Create = await worker.fetch(new Request(`https://mili.example.com/${adminUuid}/api/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'no-d1-user', preset: 'iran-fast' })
+    }), emptyEnv, {});
+    const noD1CreateBody = await noD1Create.json();
+    assert.strictEqual(noD1Create.status, 500, 'ساخت کاربر بدون D1 باید رد شود');
+    assert.ok(String(noD1CreateBody.message || '').includes('D1'), 'پیام خطای بدون D1 باید به اتصال D1 اشاره کند');
+    console.log('  ✓ تست ۱ (استقرار دستی بدون D1، هشدار ذخیره‌سازی و جلوگیری از ساخت کاربر موقت): موفق');
 
     // تست ۲: اتصال دیتابیس D1 و ساخت خودکار جداول + پنل مدیریت
     const mockD1 = createMockD1Database();
@@ -287,6 +309,27 @@ async function runTests() {
     assert.strictEqual(loginResp.status, 200, 'ورود با رمز عبور باید موفق باشد');
     let sessionCookie = (loginResp.headers.get('Set-Cookie') || '').split(';')[0];
     assert.ok(sessionCookie.startsWith('mili_auth='), 'کوکی نشست امن باید صادر شود');
+
+    // نشست باید در ایزولهٔ تازه (ماژول تازه با همان D1) هم معتبر بماند؛
+    // وگرنه بعد از هر رفرش کاربر به صفحهٔ لاگین برمی‌گردد.
+    const freshMod = await import(tmpTestFile + '?isolate=2');
+    const freshWorker = freshMod.default;
+    const freshAdminResp = await freshWorker.fetch(
+      new Request(`https://mili.example.com/${adminUuid}`, { headers: { Cookie: sessionCookie } }),
+      d1Env,
+      {}
+    );
+    assert.strictEqual(freshAdminResp.status, 200, 'صفحهٔ مدیریت در ایزولهٔ تازه باید باز شود');
+    const freshAdminHtml = await freshAdminResp.text();
+    assert.ok(freshAdminHtml.includes('data-skin='), 'نشست مدیریتی باید بعد از ایزولهٔ تازه معتبر بماند');
+    const rootRedirect = await freshWorker.fetch(
+      new Request('https://mili.example.com/', { headers: { Cookie: sessionCookie } }),
+      d1Env,
+      {}
+    );
+    assert.strictEqual(rootRedirect.status, 302, 'ریشه با نشست معتبر باید به پنل ریدایرکت شود');
+    assert.strictEqual(rootRedirect.headers.get('Location'), '/admin', 'ریدایرکت ریشه باید به مسیر مدیریت باشد');
+    console.log('  ✓ تست ۳-ب (ماندگاری نشست در ایزولهٔ تازه + ریدایرکت ریشه به پنل): موفق');
 
     const chgPwdResp = await worker.fetch(
       new Request('https://mili.example.com/api/admin/change-password', {

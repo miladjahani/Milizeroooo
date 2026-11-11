@@ -26,6 +26,12 @@ import { PWA_CLIENT_JS, PWA_HEAD_TAGS } from './pwa.js';
 
 const SUPPORT_URL = `https://t.me/${String(TELEGRAM_SUPPORT).replace(/^@/, '')}`;
 
+function htmlEscape(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 // دیکشنری دوزبانه پنل (فارسی / انگلیسی)
 const PANEL_I18N = {
   fa: {
@@ -134,6 +140,7 @@ function countryOptions() {
 
 export function renderAdminDashboardHtml(initialData = {}) {
   const config = initialData.config || CONFIG_DEFAULTS;
+  const diagnostics = initialData.diagnostics || {};
   const safeInitialJson = JSON.stringify({
     brand: BRAND_NAME,
     version: VERSION,
@@ -3319,6 +3326,64 @@ ${PWA_HEAD_TAGS}
     color: var(--text);
   }
 
+  /* هشدار حالت موقت: بدون D1 هیچ کاربر یا نشستی بعد از رفرش نمی‌ماند */
+  .storage-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 0 0 14px;
+    padding: 13px 15px;
+    border: 1px solid rgba(255, 98, 98, 0.42);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(255, 98, 98, 0.13), rgba(255, 206, 92, 0.06));
+    box-shadow: 0 12px 30px -22px rgba(255, 98, 98, 0.8);
+    color: var(--text);
+  }
+  .storage-alert .sa-icon {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--danger);
+    background: rgba(255, 98, 98, 0.12);
+    border: 1px solid rgba(255, 98, 98, 0.3);
+  }
+  .storage-alert .sa-body { flex: 1 1 auto; min-width: 0; }
+  .storage-alert .sa-title { display: block; font-size: 0.84rem; font-weight: 800; margin-bottom: 3px; }
+  .storage-alert .sa-text { display: block; font-size: 0.72rem; line-height: 1.75; color: var(--muted); }
+  .storage-alert .sa-text code {
+    font-family: var(--mono, ui-monospace, monospace);
+    color: var(--neon);
+    background: rgba(var(--neon-rgb), 0.08);
+    padding: 1px 5px;
+    border-radius: 5px;
+  }
+  .storage-alert .sa-err { display: block; margin-top: 5px; font-size: 0.66rem; color: var(--danger); word-break: break-word; }
+  .storage-alert .sa-btn {
+    flex: 0 0 auto;
+    align-self: center;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    padding: 7px 11px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .storage-alert .sa-btn:hover { border-color: var(--warn); color: var(--warn); }
+  @media (max-width: 700px) {
+    .storage-alert { flex-wrap: wrap; padding: 10px 11px; gap: 8px; }
+    .storage-alert .sa-icon { width: 28px; height: 28px; }
+    .storage-alert .sa-title { font-size: 0.76rem; }
+    .storage-alert .sa-text { font-size: 0.66rem; line-height: 1.7; }
+    .storage-alert .sa-btn { width: 100%; }
+  }
+
 </style>
 </head>
 <body data-theme="neon" data-fx="auto">
@@ -3372,6 +3437,16 @@ ${PWA_HEAD_TAGS}
   </nav>
 
   <main class="main">
+
+  ${!diagnostics.d1Enabled ? `<div class="storage-alert" role="alert">
+    <span class="sa-icon">${icon('database')}</span>
+    <div class="sa-body">
+      <b class="sa-title">حالت موقت — دیتابیس D1 متصل نیست</b>
+      <span class="sa-text">کاربران، تنظیمات و نشست ورود فقط در حافظه می‌مانند؛ با هر رفرش پاک می‌شوند و ساب‌لینک کاربران خطا می‌دهد. در Cloudflare وارد Worker → Settings → Bindings شوید و یک <b>D1 database</b> با نام <code>DB</code> متصل کنید؛ جدول‌ها خودکار ساخته می‌شوند. بعد از اتصال، یک‌بار رمز مدیر را تنظیم و کاربران را دوباره بسازید (داده‌های حالت موقت منتقل نمی‌شوند).</span>
+      ${diagnostics.d1Error ? `<span class="sa-err">${htmlEscape(diagnostics.d1Error)}</span>` : ''}
+    </div>
+    <button class="sa-btn" type="button" onclick="window.location.reload()">بررسی دوباره</button>
+  </div>` : ''}
 
   <!-- نوار تب‌ها: از منو جدا است و همهٔ صفحه‌ها را با یک کلیک عوض می‌کند -->
   <div class="tabbar" id="tabbar">

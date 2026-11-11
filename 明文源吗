@@ -4395,6 +4395,27 @@ function detectKvBinding(env) {
   return null;
 }
 
+// نوشتن کاربر بدون D1 فقط در حافظهٔ همان ایزوله می‌ماند؛ بعد از رفرش یا رفتن
+// درخواست به ایزولهٔ دیگر، کاربر ناپدید می‌شود و ساب‌لینکش 403 می‌گیرد.
+// پس عملیات کاربران را بدون D1 آماده قبول نمی‌کنیم و پیام قابل‌فهم می‌دهیم.
+function requireDurableUserStore(env = {}) {
+  const detected = detectD1Binding(env);
+  if (!detected) {
+    throw new Error(
+      'دیتابیس D1 به ورکر متصل نیست؛ تغییرات کاربران فقط در حافظه ذخیره می‌شود و با رفرش پاک می‌شود. ' +
+      'در Cloudflare وارد Worker → Settings → Bindings شوید، یک D1 database با نام DB متصل کنید و دوباره تلاش کنید.'
+    );
+  }
+  if (!memoryStore.d1SchemaReady) {
+    throw new Error(
+      'اتصال D1 پیدا شد اما جدول‌های دیتابیس آماده نشدند: ' +
+      (memoryStore.d1Error || 'خطای نامشخص') +
+      ' — یک‌بار صفحه را رفرش کنید یا اتصال D1 را در Cloudflare بررسی کنید.'
+    );
+  }
+  return detected;
+}
+
 function safeBind(stmt, ...params) {
   const sanitized = params.map(p => {
     if (p === undefined) return null;
@@ -5246,6 +5267,7 @@ async function getUserByIdOrToken(env = {}, token = '') {
 // ایجاد کاربر جدید با قفل سخت‌گیرانه حداکثر ۳ کاربر
 async function createUser(env = {}, payload = {}, clientIp = '') {
   await ensureD1Schema(env);
+  const detectedD1 = requireDurableUserStore(env);
 
   // محدودیت قطعی حداکثر ۳ کاربر طبق درخواست کاربر
   const currentUsers = await listUsers(env);
@@ -5356,9 +5378,8 @@ async function createUser(env = {}, payload = {}, clientIp = '') {
   memoryStore.users.set(id, userObj);
   memoryStore.lastUsersSyncAt = now;
 
-  const detectedD1 = detectD1Binding(env);
   let insertError = null;
-  if (detectedD1 && memoryStore.d1SchemaReady) {
+  if (detectedD1) {
     try {
       await safeBind(
         detectedD1.db.prepare(
@@ -5409,6 +5430,7 @@ async function createUser(env = {}, payload = {}, clientIp = '') {
 }
 
 async function updateUser(env = {}, userId, payload = {}, clientIp = '') {
+  const detectedD1 = requireDurableUserStore(env);
   const existing = await getUserByIdOrToken(env, userId);
   if (!existing) return null;
   const now = Date.now();
@@ -5496,8 +5518,7 @@ async function updateUser(env = {}, userId, payload = {}, clientIp = '') {
   memoryStore.users.set(existing.id, updated);
   memoryStore.lastUsersSyncAt = now;
 
-  const detectedD1 = detectD1Binding(env);
-  if (detectedD1 && memoryStore.d1SchemaReady) {
+  if (detectedD1) {
     try {
       await safeBind(
         detectedD1.db.prepare(
@@ -5541,6 +5562,7 @@ async function updateUser(env = {}, userId, payload = {}, clientIp = '') {
 }
 
 async function resetUserStats(env = {}, userId, clientIp = '') {
+  const detectedD1 = requireDurableUserStore(env);
   const existing = await getUserByIdOrToken(env, userId);
   if (!existing) return null;
   const now = Date.now();
@@ -5556,8 +5578,7 @@ async function resetUserStats(env = {}, userId, clientIp = '') {
   memoryStore.users.set(existing.id, updated);
   memoryStore.lastUsersSyncAt = now;
 
-  const detectedD1 = detectD1Binding(env);
-  if (detectedD1 && memoryStore.d1SchemaReady) {
+  if (detectedD1) {
     try {
       await safeBind(
         detectedD1.db.prepare(
@@ -5574,17 +5595,21 @@ async function resetUserStats(env = {}, userId, clientIp = '') {
 }
 
 async function deleteUser(env = {}, userId, clientIp = '') {
+  const detectedD1 = requireDurableUserStore(env);
   const existing = await getUserByIdOrToken(env, userId);
   if (!existing) return false;
   memoryStore.users.delete(existing.id);
   memoryStore.pendingUserFlush.delete(existing.id);
   memoryStore.lastUsersSyncAt = Date.now();
 
-  const detectedD1 = detectD1Binding(env);
-  if (detectedD1 && memoryStore.d1SchemaReady) {
-    try {
-      await safeBind(detectedD1.db.prepare(`DELETE FROM users WHERE id = ?`), existing.id).run();
-    } catch (_e) {}
+  try {
+    await safeBind(detectedD1.db.prepare(`DELETE FROM users WHERE id = ?`), existing.id).run();
+    const stillThere = await detectedD1.db.prepare(`SELECT id FROM users WHERE id = ?`).bind(existing.id).first();
+    if (stillThere && stillThere.id) throw new Error('ردیف کاربر پس از حذف در D1 باقی مانده است');
+  } catch (err) {
+    memoryStore.users.set(existing.id, existing);
+    memoryStore.lastUsersSyncAt = Date.now();
+    throw new Error('حذف کاربر از D1 ناموفق بود: ' + (err?.message || String(err)));
   }
   await addAuditLog(env, 'حذف کاربر', `${existing.username}`, clientIp);
   return true;
@@ -15584,6 +15609,7 @@ function renderLoginGatewayHtml(options = {}) {
   const initialized = options.initialized !== false;
   const customPath = options.customPath || '';
   const recover = options.recover === true;
+  const storageWarning = options.storageWarning === true;
   const adminHint = String(customPath || '').trim();
 
   return stripEmoji(`<!DOCTYPE html>
@@ -15771,6 +15797,26 @@ ${PWA_HEAD_TAGS}
     padding: 0;
   }
   .ghost-link:hover { text-decoration: underline; }
+  .storage-warn {
+    margin: 0 0 13px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 98, 98, 0.42);
+    border-radius: 11px;
+    background: rgba(255, 98, 98, 0.09);
+    color: #ffd9d9;
+    font-size: 0.72rem;
+    line-height: 1.75;
+  }
+  .storage-warn b { color: #ff9e9e; }
+  .storage-warn code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #b5ff4d;
+    background: rgba(181, 255, 77, 0.1);
+    padding: 1px 5px;
+    border-radius: 5px;
+  }
+  body.light-mode .storage-warn { border-color: rgba(185, 28, 28, 0.35); background: rgba(254, 226, 226, 0.75); color: #7f1d1d; }
+  body.light-mode .storage-warn b { color: #b91c1c; }
   .err {
     display: none;
     margin: 0 0 12px;
@@ -15853,6 +15899,8 @@ ${PWA_HEAD_TAGS}
             <div class="brand-sub" id="brandSub"></div>
           </div>
         </div>
+
+        ${storageWarning ? `<div class="storage-warn" role="alert"><b>حالت موقت:</b> دیتابیس D1 به ورکر متصل نیست. رمز عبور، کاربران و نشست بعد از هر رفرش پاک می‌شوند و ساب‌لینک‌ها خطا می‌دهند. در Cloudflare → Worker → Settings → Bindings یک D1 database با نام <code>DB</code> متصل کنید.</div>` : ''}
 
         <div class="err" id="errBox"></div>
 
@@ -17642,6 +17690,12 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
 
 const SUPPORT_URL = `https://t.me/${String(TELEGRAM_SUPPORT).replace(/^@/, '')}`;
 
+function htmlEscape(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 // دیکشنری دوزبانه پنل (فارسی / انگلیسی)
 const PANEL_I18N = {
   fa: {
@@ -17750,6 +17804,7 @@ function countryOptions() {
 
 function renderAdminDashboardHtml(initialData = {}) {
   const config = initialData.config || CONFIG_DEFAULTS;
+  const diagnostics = initialData.diagnostics || {};
   const safeInitialJson = JSON.stringify({
     brand: BRAND_NAME,
     version: VERSION,
@@ -20935,6 +20990,64 @@ ${PWA_HEAD_TAGS}
     color: var(--text);
   }
 
+  /* هشدار حالت موقت: بدون D1 هیچ کاربر یا نشستی بعد از رفرش نمی‌ماند */
+  .storage-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 0 0 14px;
+    padding: 13px 15px;
+    border: 1px solid rgba(255, 98, 98, 0.42);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(255, 98, 98, 0.13), rgba(255, 206, 92, 0.06));
+    box-shadow: 0 12px 30px -22px rgba(255, 98, 98, 0.8);
+    color: var(--text);
+  }
+  .storage-alert .sa-icon {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--danger);
+    background: rgba(255, 98, 98, 0.12);
+    border: 1px solid rgba(255, 98, 98, 0.3);
+  }
+  .storage-alert .sa-body { flex: 1 1 auto; min-width: 0; }
+  .storage-alert .sa-title { display: block; font-size: 0.84rem; font-weight: 800; margin-bottom: 3px; }
+  .storage-alert .sa-text { display: block; font-size: 0.72rem; line-height: 1.75; color: var(--muted); }
+  .storage-alert .sa-text code {
+    font-family: var(--mono, ui-monospace, monospace);
+    color: var(--neon);
+    background: rgba(var(--neon-rgb), 0.08);
+    padding: 1px 5px;
+    border-radius: 5px;
+  }
+  .storage-alert .sa-err { display: block; margin-top: 5px; font-size: 0.66rem; color: var(--danger); word-break: break-word; }
+  .storage-alert .sa-btn {
+    flex: 0 0 auto;
+    align-self: center;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    padding: 7px 11px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .storage-alert .sa-btn:hover { border-color: var(--warn); color: var(--warn); }
+  @media (max-width: 700px) {
+    .storage-alert { flex-wrap: wrap; padding: 10px 11px; gap: 8px; }
+    .storage-alert .sa-icon { width: 28px; height: 28px; }
+    .storage-alert .sa-title { font-size: 0.76rem; }
+    .storage-alert .sa-text { font-size: 0.66rem; line-height: 1.7; }
+    .storage-alert .sa-btn { width: 100%; }
+  }
+
 </style>
 </head>
 <body data-theme="neon" data-fx="auto">
@@ -20988,6 +21101,16 @@ ${PWA_HEAD_TAGS}
   </nav>
 
   <main class="main">
+
+  ${!diagnostics.d1Enabled ? `<div class="storage-alert" role="alert">
+    <span class="sa-icon">${icon('database')}</span>
+    <div class="sa-body">
+      <b class="sa-title">حالت موقت — دیتابیس D1 متصل نیست</b>
+      <span class="sa-text">کاربران، تنظیمات و نشست ورود فقط در حافظه می‌مانند؛ با هر رفرش پاک می‌شوند و ساب‌لینک کاربران خطا می‌دهد. در Cloudflare وارد Worker → Settings → Bindings شوید و یک <b>D1 database</b> با نام <code>DB</code> متصل کنید؛ جدول‌ها خودکار ساخته می‌شوند. بعد از اتصال، یک‌بار رمز مدیر را تنظیم و کاربران را دوباره بسازید (داده‌های حالت موقت منتقل نمی‌شوند).</span>
+      ${diagnostics.d1Error ? `<span class="sa-err">${htmlEscape(diagnostics.d1Error)}</span>` : ''}
+    </div>
+    <button class="sa-btn" type="button" onclick="window.location.reload()">بررسی دوباره</button>
+  </div>` : ''}
 
   <!-- نوار تب‌ها: از منو جدا است و همهٔ صفحه‌ها را با یک کلیک عوض می‌کند -->
   <div class="tabbar" id="tabbar">
@@ -24672,20 +24795,24 @@ export default {
         const match = raw.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
         return match ? decodeURIComponent(match[1]) : '';
       };
-      const loginPageResponse = async (extra = {}) => new Response(renderLoginGatewayHtml({
-        initialized: await hasAdminPassword(env),
-        customPath: globalCfg.d,
-        ...extra
-      }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Cache-Control': 'no-store',
-          // استتار nginx: کلادفلر صفحه را وب‌سرور معمولی می‌بیند
-          'Server': 'nginx',
-          'X-Powered-By': 'nginx'
-        }
-      });
+      const loginPageResponse = async (extra = {}) => {
+        const storage = await getStorageDiagnostics(env);
+        return new Response(renderLoginGatewayHtml({
+          initialized: storage.hasPassword,
+          customPath: globalCfg.d,
+          storageWarning: !storage.d1Enabled,
+          ...extra
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store',
+            // استتار nginx: کلادفلر صفحه را وب‌سرور معمولی می‌بیند
+            'Server': 'nginx',
+            'X-Powered-By': 'nginx'
+          }
+        });
+      };
 
       // ۱. هندل کردن ترافیک پروکسی WebSocket
       if (isWebSocket) {
@@ -24877,6 +25004,15 @@ export default {
                 });
               }
             } catch (_e) {}
+          }
+          // اگر نشست معتبر است، ریشه به پنل هدایت شود تا رفرش/اجرای PWA
+          // کاربر را دوباره به صفحهٔ ورود برنگرداند.
+          if (await verifyAdminSession(env, readCookie('mili_auth'))) {
+            const targetPath = '/' + String(globalCfg.d || adminUuid).replace(/^\/+|\/+$/g, '');
+            return new Response(null, {
+              status: 302,
+              headers: { 'Location': targetPath, 'Cache-Control': 'no-store' }
+            });
           }
           // مسیر مدیریت دیگر داخل HTML لو نمی‌رود؛ فقط پس از ورود موفق از سرور برگردانده می‌شود
           return await loginPageResponse();

@@ -20,11 +20,13 @@ BRAND = "miliconfig"
 [observability]
 enabled = true
 
-# برای اتصال از طریق Wrangler CLI، شناسه دیتابیس D1 اکانت خودتان را جایگزین کرده و از حالت کامنت خارج کنید:
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "miliconfig-db"
-# database_id = "YOUR_D1_DATABASE_ID_HERE"
+# اتصال دائمی D1: بدون این بایندینگ، کاربران و نشست ورود فقط در حافظه می‌مانند
+# و بعد از هر رفرش پاک می‌شوند. با Wrangler 4.45+ نبودن database_id باعث می‌شود
+# دیتابیس به‌صورت خودکار ساخته و به ورکر متصل شود. اگر نسخهٔ قدیمی‌تری دارید،
+# یک‌بار از داشبورد Cloudflare (Settings -> Bindings) بایندینگ DB را وصل کنید.
+[[d1_databases]]
+binding = "DB"
+database_name = "miliconfig-db"
 
 # کرون تازه‌سازی استخر پروکسی کشورها
 [triggers]

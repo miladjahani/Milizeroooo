@@ -134,20 +134,24 @@ export default {
         const match = raw.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
         return match ? decodeURIComponent(match[1]) : '';
       };
-      const loginPageResponse = async (extra = {}) => new Response(renderLoginGatewayHtml({
-        initialized: await hasAdminPassword(env),
-        customPath: globalCfg.d,
-        ...extra
-      }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Cache-Control': 'no-store',
-          // استتار nginx: کلادفلر صفحه را وب‌سرور معمولی می‌بیند
-          'Server': 'nginx',
-          'X-Powered-By': 'nginx'
-        }
-      });
+      const loginPageResponse = async (extra = {}) => {
+        const storage = await getStorageDiagnostics(env);
+        return new Response(renderLoginGatewayHtml({
+          initialized: storage.hasPassword,
+          customPath: globalCfg.d,
+          storageWarning: !storage.d1Enabled,
+          ...extra
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store',
+            // استتار nginx: کلادفلر صفحه را وب‌سرور معمولی می‌بیند
+            'Server': 'nginx',
+            'X-Powered-By': 'nginx'
+          }
+        });
+      };
 
       // ۱. هندل کردن ترافیک پروکسی WebSocket
       if (isWebSocket) {
@@ -339,6 +343,15 @@ export default {
                 });
               }
             } catch (_e) {}
+          }
+          // اگر نشست معتبر است، ریشه به پنل هدایت شود تا رفرش/اجرای PWA
+          // کاربر را دوباره به صفحهٔ ورود برنگرداند.
+          if (await verifyAdminSession(env, readCookie('mili_auth'))) {
+            const targetPath = '/' + String(globalCfg.d || adminUuid).replace(/^\/+|\/+$/g, '');
+            return new Response(null, {
+              status: 302,
+              headers: { 'Location': targetPath, 'Cache-Control': 'no-store' }
+            });
           }
           // مسیر مدیریت دیگر داخل HTML لو نمی‌رود؛ فقط پس از ورود موفق از سرور برگردانده می‌شود
           return await loginPageResponse();

@@ -9,11 +9,11 @@ BRAND = "miliconfig"
 [observability]
 enabled = true
 
-# برای اتصال از طریق Wrangler CLI، شناسه دیتابیس D1 اکانت خودتان را وارد کنید:
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "miliconfig-db"
-# database_id = "YOUR_D1_DATABASE_ID_HERE"
+# اتصال دائمی D1: با Wrangler 4.45+ دیتابیس به‌صورت خودکار ساخته می‌شود.
+# برای نسخه‌های قدیمی‌تر، database_id اکانت خودتان را اینجا اضافه کنید.
+[[d1_databases]]
+binding = "DB"
+database_name = "miliconfig-db"
 
 [triggers]
 crons = ["*/15 * * * *"]

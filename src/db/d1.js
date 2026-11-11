@@ -80,6 +80,27 @@ export function detectKvBinding(env) {
   return null;
 }
 
+// نوشتن کاربر بدون D1 فقط در حافظهٔ همان ایزوله می‌ماند؛ بعد از رفرش یا رفتن
+// درخواست به ایزولهٔ دیگر، کاربر ناپدید می‌شود و ساب‌لینکش 403 می‌گیرد.
+// پس عملیات کاربران را بدون D1 آماده قبول نمی‌کنیم و پیام قابل‌فهم می‌دهیم.
+function requireDurableUserStore(env = {}) {
+  const detected = detectD1Binding(env);
+  if (!detected) {
+    throw new Error(
+      'دیتابیس D1 به ورکر متصل نیست؛ تغییرات کاربران فقط در حافظه ذخیره می‌شود و با رفرش پاک می‌شود. ' +
+      'در Cloudflare وارد Worker → Settings → Bindings شوید، یک D1 database با نام DB متصل کنید و دوباره تلاش کنید.'
+    );
+  }
+  if (!memoryStore.d1SchemaReady) {
+    throw new Error(
+      'اتصال D1 پیدا شد اما جدول‌های دیتابیس آماده نشدند: ' +
+      (memoryStore.d1Error || 'خطای نامشخص') +
+      ' — یک‌بار صفحه را رفرش کنید یا اتصال D1 را در Cloudflare بررسی کنید.'
+    );
+  }
+  return detected;
+}
+
 function safeBind(stmt, ...params) {
   const sanitized = params.map(p => {
     if (p === undefined) return null;
@@ -931,6 +952,7 @@ export async function getUserByIdOrToken(env = {}, token = '') {
 // ایجاد کاربر جدید با قفل سخت‌گیرانه حداکثر ۳ کاربر
 export async function createUser(env = {}, payload = {}, clientIp = '') {
   await ensureD1Schema(env);
+  const detectedD1 = requireDurableUserStore(env);
 
   // محدودیت قطعی حداکثر ۳ کاربر طبق درخواست کاربر
   const currentUsers = await listUsers(env);
@@ -1041,9 +1063,8 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
   memoryStore.users.set(id, userObj);
   memoryStore.lastUsersSyncAt = now;
 
-  const detectedD1 = detectD1Binding(env);
   let insertError = null;
-  if (detectedD1 && memoryStore.d1SchemaReady) {
+  if (detectedD1) {
     try {
       await safeBind(
         detectedD1.db.prepare(
@@ -1094,6 +1115,7 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
 }
 
 export async function updateUser(env = {}, userId, payload = {}, clientIp = '') {
+  const detectedD1 = requireDurableUserStore(env);
   const existing = await getUserByIdOrToken(env, userId);
   if (!existing) return null;
   const now = Date.now();
@@ -1181,8 +1203,7 @@ export async function updateUser(env = {}, userId, payload = {}, clientIp = '') 
   memoryStore.users.set(existing.id, updated);
   memoryStore.lastUsersSyncAt = now;
 
-  const detectedD1 = detectD1Binding(env);
-  if (detectedD1 && memoryStore.d1SchemaReady) {
+  if (detectedD1) {
     try {
       await safeBind(
         detectedD1.db.prepare(
@@ -1226,6 +1247,7 @@ export async function updateUser(env = {}, userId, payload = {}, clientIp = '') 
 }
 
 export async function resetUserStats(env = {}, userId, clientIp = '') {
+  const detectedD1 = requireDurableUserStore(env);
   const existing = await getUserByIdOrToken(env, userId);
   if (!existing) return null;
   const now = Date.now();
@@ -1241,8 +1263,7 @@ export async function resetUserStats(env = {}, userId, clientIp = '') {
   memoryStore.users.set(existing.id, updated);
   memoryStore.lastUsersSyncAt = now;
 
-  const detectedD1 = detectD1Binding(env);
-  if (detectedD1 && memoryStore.d1SchemaReady) {
+  if (detectedD1) {
     try {
       await safeBind(
         detectedD1.db.prepare(
@@ -1259,17 +1280,21 @@ export async function resetUserStats(env = {}, userId, clientIp = '') {
 }
 
 export async function deleteUser(env = {}, userId, clientIp = '') {
+  const detectedD1 = requireDurableUserStore(env);
   const existing = await getUserByIdOrToken(env, userId);
   if (!existing) return false;
   memoryStore.users.delete(existing.id);
   memoryStore.pendingUserFlush.delete(existing.id);
   memoryStore.lastUsersSyncAt = Date.now();
 
-  const detectedD1 = detectD1Binding(env);
-  if (detectedD1 && memoryStore.d1SchemaReady) {
-    try {
-      await safeBind(detectedD1.db.prepare(`DELETE FROM users WHERE id = ?`), existing.id).run();
-    } catch (_e) {}
+  try {
+    await safeBind(detectedD1.db.prepare(`DELETE FROM users WHERE id = ?`), existing.id).run();
+    const stillThere = await detectedD1.db.prepare(`SELECT id FROM users WHERE id = ?`).bind(existing.id).first();
+    if (stillThere && stillThere.id) throw new Error('ردیف کاربر پس از حذف در D1 باقی مانده است');
+  } catch (err) {
+    memoryStore.users.set(existing.id, existing);
+    memoryStore.lastUsersSyncAt = Date.now();
+    throw new Error('حذف کاربر از D1 ناموفق بود: ' + (err?.message || String(err)));
   }
   await addAuditLog(env, 'حذف کاربر', `${existing.username}`, clientIp);
   return true;
