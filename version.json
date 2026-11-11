@@ -1,0 +1,14 @@
+{
+  "version": "3.9.2",
+  "build": "2026-11-10.1",
+  "publishedAt": "2026-11-10T23:40:00.000Z",
+  "bundle": "https://raw.githubusercontent.com/miladjahani/Miliconfigpro/main/_worker.js",
+  "repo": "https://github.com/miladjahani/Miliconfigpro",
+  "notes": [
+    "پروکسی تلگرام WEB اضافه شد: رلهٔ واقعی MTProto-over-WebSocket روی همین ورکر با لینک رسمی t.me/webproxy (پشتیبانی از Telegram Desktop و کلاینت‌های WEB proxy)",
+    "دکمهٔ «پروکسی تلگرام» در تب کاربران: ساخت پروکسی با سکرت تصادفی، وضعیت آنلاین/متوقف، حجم مصرفی، ریکوئست امروز و کل، اتصالات زنده، تغییر سکرت، صفر کردن آمار و حذف",
+    "تنظیمات و آمار پروکسی تلگرام در جدول تازهٔ telegram_proxy دیتابیس D1 (ساخت خودکار) نگه‌داری می‌شود",
+    "سازندهٔ قدیمی لینک‌های Fake-TLS/SOCKS5 و وب‌پروکسی /webproxy به‌طور کامل حذف شدند",
+    "API مدیریت پروکسی تلگرام فقط با نشست معتبر مدیر در دسترس است (/{مسیر مدیریت}/api/telegram-proxy/*)"
+  ]
+}
