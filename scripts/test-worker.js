@@ -10,6 +10,7 @@ import path from 'node:path';
 import assert from 'node:assert';
 import nodeCrypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { CF_PORT_CHOICES, VERSION } from '../src/config/defaults.js';
 
 if (!globalThis.crypto && nodeCrypto.webcrypto) {
   globalThis.crypto = nodeCrypto.webcrypto;
@@ -209,6 +210,24 @@ async function runTests() {
 
   assert.ok(fs.existsSync(bundlePath), 'فایل dist/_worker.js باید وجود داشته باشد');
   const rawBundle = fs.readFileSync(bundlePath, 'utf8');
+
+  // تست ۰-ب: منبع بروزرسانی و مانیفست باید همین مخزن و هم‌نسخه با کد باشند
+  const updateManifest = JSON.parse(fs.readFileSync(path.join(projectRoot, 'version.json'), 'utf8'));
+  assert.strictEqual(
+    updateManifest.repo,
+    'https://github.com/miladjahani/Milizeroooo',
+    'version.json باید به همین مخزن اشاره کند'
+  );
+  assert.ok(
+    String(updateManifest.bundle || '').includes('raw.githubusercontent.com/miladjahani/Milizeroooo/main/_worker.js'),
+    'باندل بروزرسانی باید از همین مخزن خوانده شود'
+  );
+  assert.strictEqual(
+    updateManifest.version,
+    String(VERSION).replace(/^v/i, ''),
+    'نسخهٔ version.json باید با VERSION کد یکی باشد'
+  );
+  console.log('  ✓ تست ۰-ب (منبع واحد بروزرسانی: مخزن Milizeroooo + هم‌نسخه بودن version.json): موفق');
 
   // تست ۰: بررسی صفر بودن امضاهای متنی حساس پروکسی در باندل نهایی برای جلوگیری ۱۰۰٪ از بن کلادفلر
   const forbiddenSignatures = ['vless://', 'trojan://', 'wireguard://', 'shadowsocks', 'CMLiussss', 'v2ray-plugin', 'chacha20-ietf-poly1305'];
@@ -600,6 +619,35 @@ async function runTests() {
       authedAdminHtml.includes('mili-select-wrap'),
       'تب کاربران باید دکمهٔ پروکسی تلگرام، دکمه‌های گرد نورانی ساخت سریع کاربر و لیست‌های کشویی درون‌برنامه‌ای را داشته باشد'
     );
+    assert.ok(
+      authedAdminHtml.includes('id="updateAlert"') &&
+      authedAdminHtml.includes('data-act="dismiss-update"') &&
+      authedAdminHtml.includes('id="updateAlertVersion"'),
+      'پنل باید بنر اعلان نسخهٔ جدید و دکمهٔ بستن آن را داشته باشد'
+    );
+    assert.ok(
+      authedAdminHtml.includes('data-port-pick') &&
+      authedAdminHtml.includes("type: 'portChips'") &&
+      authedAdminHtml.includes('portChoices') &&
+      CF_PORT_CHOICES.every(p => authedAdminHtml.includes('"port":' + p.port)),
+      'فرم کاربر باید همهٔ پورت‌های کلادفلر را به‌صورت قابل انتخاب (نه ورودی متنی) نشان دهد'
+    );
+    assert.ok(
+      authedAdminHtml.includes('data-backup-tab="download"') &&
+      authedAdminHtml.includes('data-backup-tab="restore"') &&
+      authedAdminHtml.includes('data-backup-tab="users"') &&
+      authedAdminHtml.includes('data-backup-pane="download"') &&
+      authedAdminHtml.includes('data-backup-pane="restore"') &&
+      authedAdminHtml.includes('data-backup-pane="users"'),
+      'پنجرهٔ بکاپ باید سه تب دانلود، بازیابی و بکاپ کاربران داشته باشد'
+    );
+    assert.ok(
+      authedAdminHtml.includes('function downloadFile') &&
+      authedAdminHtml.includes('function downloadAdminBackup') &&
+      authedAdminHtml.includes('function downloadUserBackup') &&
+      authedAdminHtml.includes('a[download][href]'),
+      'همهٔ دانلودها باید از مسیر fetch/blob با بررسی خطا و لینک‌های download پشتیبانی کنند'
+    );
     const usersPanelStart = authedAdminHtml.indexOf('<section class="panel" data-panel="users">');
     const usersPanelEnd = authedAdminHtml.indexOf('<section class="panel" data-panel="scanner">');
     const usersPanelHtml = usersPanelStart >= 0 && usersPanelEnd > usersPanelStart
@@ -634,6 +682,11 @@ async function runTests() {
       d1Env, {}
     );
     assert.strictEqual(userBackupResp.status, 200, 'دانلود بکاپ کاربر باید کد 200 برگرداند');
+    assert.match(
+      userBackupResp.headers.get('content-disposition') || '',
+      /attachment;\s*filename=/i,
+      'پاسخ بکاپ کاربر باید به‌صورت فایل پیوست دانلود شود'
+    );
     const userBackupJson = await userBackupResp.json();
     assert.strictEqual(userBackupJson.app, 'miliconfig-user-backup');
     assert.strictEqual(userBackupJson.user.username, 'reza-vip');
@@ -644,6 +697,11 @@ async function runTests() {
       d1Env, {}
     );
     assert.strictEqual(adminBackupResp.status, 200, 'دانلود بکاپ کامل ادمین باید کد 200 برگرداند');
+    assert.match(
+      adminBackupResp.headers.get('content-disposition') || '',
+      /attachment;\s*filename=/i,
+      'پاسخ بکاپ کامل ادمین باید به‌صورت فایل پیوست دانلود شود'
+    );
     const adminBackupJson = await adminBackupResp.json();
     assert.strictEqual(adminBackupJson.app, 'miliconfig-os');
     assert.strictEqual(adminBackupJson.users.length, 5, 'بکاپ کامل ادمین باید شامل هر ۵ کاربر باشد');

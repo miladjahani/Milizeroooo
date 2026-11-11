@@ -1358,14 +1358,45 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     }
 
 
+    // دانلود با بررسی وضعیت پاسخ؛ خطای ۴۰۳/۵۰۳ به‌صورت پیام دیده می‌شود
+    // و به‌جای آن یک فایل خراب ذخیره نمی‌شود.
+    function downloadFileUrl(url, fallbackName) {
+      var fileName = String(fallbackName || 'download');
+      fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+        .then(function(res) {
+          if (!res.ok) {
+            return res.text().then(function(text) {
+              var msg = String(text || '').trim();
+              try {
+                var parsed = JSON.parse(msg);
+                msg = parsed.message || parsed.error || msg;
+              } catch (_e) {}
+              throw new Error(msg || ('HTTP ' + res.status));
+            });
+          }
+          var disposition = res.headers.get('Content-Disposition') || '';
+          var matched = /filename="?([^";]+)"?/i.exec(disposition);
+          if (matched && matched[1]) fileName = matched[1];
+          return res.blob().then(function(blob) {
+            var blobUrl = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = fileName;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 5000);
+            showToast('دانلود شروع شد');
+          });
+        })
+        .catch(function(err) {
+          showToast('دانلود ناموفق بود: ' + (err && err.message ? err.message : 'خطای شبکه'));
+        });
+    }
+
     function downloadUserBackup() {
-      var a = document.createElement('a');
-      a.href = '${usageApiUrl}/backup?backup=1&t=' + Date.now();
-      a.setAttribute('download', 'miliconfig-user-backup.json');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      showToast('فایل بکاپ کامل اشتراک شما دانلود شد');
+      downloadFileUrl('${usageApiUrl}/backup?backup=1&t=' + Date.now(), 'miliconfig-user-backup.json');
     }
 
     function copyAllNodes() {
@@ -1509,6 +1540,13 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     }
 
     document.addEventListener('click', function(event) {
+      var downloadLink = event.target.closest ? event.target.closest('a[download][href]') : null;
+      if (downloadLink) {
+        if (downloadLink.origin !== window.location.origin) return;
+        event.preventDefault();
+        downloadFileUrl(downloadLink.href, downloadLink.getAttribute('download') || '');
+        return;
+      }
       var tab = event.target.closest('[data-tab]');
       if (tab) showPanel(tab.getAttribute('data-tab'));
     });

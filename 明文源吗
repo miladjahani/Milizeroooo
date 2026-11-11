@@ -1410,7 +1410,7 @@ function poolSubscriptionText(options = {}) {
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.11.0';
+const VERSION = 'v3.12.0';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // ساب‌لینک اصلی مدیر همیشه ۴۰۰ نود (همهٔ پروتکل‌ها و ترکیب‌های آدرس) دارد
@@ -3037,7 +3037,9 @@ class SsAeadSession {
 // ============================================================================
 
 
-const UPDATE_REPO = 'miladjahani/Miliconfigpro';
+// منبع واحد بروزرسانی: همین مخزن رسمی پروژه. همهٔ آینه‌ها هم از همین repo
+// ساخته می‌شوند تا نسخهٔ مستقرشده و version.json همیشه هم‌منبع باشند.
+const UPDATE_REPO = 'miladjahani/Milizeroooo';
 const UPDATE_BRANCH = 'main';
 const UPDATE_MANIFEST_PATH = 'version.json';
 const UPDATE_BUNDLE_PATH = '_worker.js';
@@ -3048,9 +3050,9 @@ function mirrorUrls(path, options = {}) {
   const clean = String(path || '').replace(/^\/+/, '');
   const bust = options.bust ? `?cb=${Date.now()}` : '';
   return [
-    `https://raw.githubusercontent.com/miladjahani/Milios3.10.2/${UPDATE_BRANCH}/${clean}${bust}`,
     `https://raw.githubusercontent.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}${bust}`,
-    `https://cdn.jsdelivr.net/gh/${UPDATE_REPO}@${UPDATE_BRANCH}/${clean}${bust}`
+    `https://cdn.jsdelivr.net/gh/${UPDATE_REPO}@${UPDATE_BRANCH}/${clean}${bust}`,
+    `https://raw.githack.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}${bust}`
   ];
 }
 
@@ -5818,7 +5820,7 @@ async function exportFullBackup(env = {}) {
 
   return {
     app: 'miliconfig-os',
-    version: 'v3.11.0',
+    version: VERSION,
     exportedAt: new Date().toISOString(),
     adminPath,
     globalConfig,
@@ -17512,14 +17514,45 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     }
 
 
+    // دانلود با بررسی وضعیت پاسخ؛ خطای ۴۰۳/۵۰۳ به‌صورت پیام دیده می‌شود
+    // و به‌جای آن یک فایل خراب ذخیره نمی‌شود.
+    function downloadFileUrl(url, fallbackName) {
+      var fileName = String(fallbackName || 'download');
+      fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+        .then(function(res) {
+          if (!res.ok) {
+            return res.text().then(function(text) {
+              var msg = String(text || '').trim();
+              try {
+                var parsed = JSON.parse(msg);
+                msg = parsed.message || parsed.error || msg;
+              } catch (_e) {}
+              throw new Error(msg || ('HTTP ' + res.status));
+            });
+          }
+          var disposition = res.headers.get('Content-Disposition') || '';
+          var matched = /filename="?([^";]+)"?/i.exec(disposition);
+          if (matched && matched[1]) fileName = matched[1];
+          return res.blob().then(function(blob) {
+            var blobUrl = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = fileName;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 5000);
+            showToast('دانلود شروع شد');
+          });
+        })
+        .catch(function(err) {
+          showToast('دانلود ناموفق بود: ' + (err && err.message ? err.message : 'خطای شبکه'));
+        });
+    }
+
     function downloadUserBackup() {
-      var a = document.createElement('a');
-      a.href = '${usageApiUrl}/backup?backup=1&t=' + Date.now();
-      a.setAttribute('download', 'miliconfig-user-backup.json');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      showToast('فایل بکاپ کامل اشتراک شما دانلود شد');
+      downloadFileUrl('${usageApiUrl}/backup?backup=1&t=' + Date.now(), 'miliconfig-user-backup.json');
     }
 
     function copyAllNodes() {
@@ -17663,6 +17696,13 @@ function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     }
 
     document.addEventListener('click', function(event) {
+      var downloadLink = event.target.closest ? event.target.closest('a[download][href]') : null;
+      if (downloadLink) {
+        if (downloadLink.origin !== window.location.origin) return;
+        event.preventDefault();
+        downloadFileUrl(downloadLink.href, downloadLink.getAttribute('download') || '');
+        return;
+      }
       var tab = event.target.closest('[data-tab]');
       if (tab) showPanel(tab.getAttribute('data-tab'));
     });
@@ -19872,6 +19912,21 @@ ${PWA_HEAD_TAGS}
   .uf-pane .field textarea:focus { border-color: var(--line-strong); box-shadow: 0 0 0 3px rgba(var(--neon-rgb), 0.08); }
   body.light-mode .uf-pane .field textarea { background: #ffffff; color: #0c1a12; }
   .field-hint { display: block; margin-top: 4px; font-size: 0.72rem; line-height: 1.7; opacity: 0.6; }
+  .port-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+  .port-chip { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer; transition: 0.15s ease; font-size: 0.72rem; user-select: none; }
+  .port-chip:hover { border-color: var(--line-strong); color: var(--text); }
+  .port-chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .port-chip b { font-weight: 700; color: var(--text); direction: ltr; }
+  .port-chip small { font-size: 0.58rem; opacity: 0.5; }
+  .port-chip.is-on { border-color: rgba(var(--neon-rgb), 0.5); background: rgba(var(--neon-rgb), 0.1); color: var(--neon); }
+  .port-chip.is-on b, .port-chip.is-on small { color: var(--neon); opacity: 1; }
+  .port-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .port-mini { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 7px; padding: 3px 7px; font: inherit; font-size: 0.64rem; cursor: pointer; }
+  .port-mini:hover { color: var(--neon); border-color: rgba(var(--neon-rgb), 0.45); }
+  .port-hint { font-size: 0.62rem; opacity: 0.5; }
+  body.light-mode .port-chip { background: #ffffff; }
+  #createModal .port-chip { padding: 4px 7px; font-size: 0.66rem; }
+  #createModal .port-chip small { font-size: 0.54rem; }
   .ip-pool { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px 9px; border: 1px dashed rgba(var(--info-rgb), 0.3); border-radius: 10px; background: rgba(var(--info-rgb), 0.045); }
   .ip-pool-title { font-size: 0.72rem; opacity: 0.75; }
   .ip-pool-count { width: 62px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.25); color: var(--text); font: inherit; font-size: 0.74rem; }
@@ -20827,6 +20882,11 @@ ${PWA_HEAD_TAGS}
     gap: 8px;
     padding: 10px 12px;
   }
+  #backupModal .backup-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding: 5px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.02); }
+  #backupModal .backup-tabs .ftab { width: 100%; justify-content: center; }
+  #backupModal .backup-pane { display: none; flex-direction: column; gap: 12px; }
+  #backupModal .backup-pane.is-active { display: flex; }
+  body.light-mode #backupModal .backup-tabs { background: #f6faf8; }
   #backupModal .card { padding: 10px 12px; border-radius: 12px; }
   #backupModal .card h3 { font-size: 0.76rem; margin-bottom: 6px; gap: 6px; }
   #backupModal .card h3 .mi { width: 15px; height: 15px; }
@@ -20941,6 +21001,9 @@ ${PWA_HEAD_TAGS}
     #backupModal .modal-head b { font-size: 0.74rem !important; gap: 5px !important; }
     #backupModal .modal-head .icon-btn { width: 30px; height: 30px; }
     #backupModal .modal-body { padding: 8px 9px !important; gap: 6px !important; }
+    #backupModal .backup-tabs { padding: 4px !important; gap: 4px !important; }
+    #backupModal .backup-tabs .ftab { font-size: 0.62rem !important; padding: 5px 4px !important; }
+    #backupModal .backup-tabs .ftab .mi { width: 13px; height: 13px; }
     #backupModal .card { padding: 8px 9px !important; border-radius: 11px !important; }
     #backupModal .card h3 { font-size: 0.69rem !important; margin-bottom: 4px !important; gap: 5px !important; }
     #backupModal .card h3 .mi { width: 13px; height: 13px; }
@@ -21048,6 +21111,77 @@ ${PWA_HEAD_TAGS}
     .storage-alert .sa-btn { width: 100%; }
   }
 
+  /* اعلان نسخهٔ جدید: بالای همهٔ تب‌ها دیده می‌شود تا کاربر از آپدیت باخبر شود */
+  .update-alert {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 14px;
+    padding: 11px 14px;
+    border: 1px solid rgba(var(--neon-rgb), 0.42);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(var(--neon-rgb), 0.13), rgba(60, 200, 255, 0.05));
+    box-shadow: 0 12px 30px -22px var(--neon-glow);
+    color: var(--text);
+  }
+  .update-alert[hidden] { display: none !important; }
+  .update-alert .ua-icon {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--neon);
+    background: rgba(var(--neon-rgb), 0.11);
+    border: 1px solid rgba(var(--neon-rgb), 0.32);
+    animation: updatePulse 2.4s ease-in-out infinite;
+  }
+  @keyframes updatePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(var(--neon-rgb), 0); }
+    50% { box-shadow: 0 0 0 6px rgba(var(--neon-rgb), 0.08); }
+  }
+  .update-alert .ua-body { flex: 1 1 auto; min-width: 0; }
+  .update-alert .ua-title { display: block; font-size: 0.82rem; font-weight: 800; margin-bottom: 2px; }
+  .update-alert .ua-ver { color: var(--neon); font-family: var(--mono, ui-monospace, monospace); }
+  .update-alert .ua-text { display: block; font-size: 0.69rem; line-height: 1.7; color: var(--muted); }
+  .update-alert .ua-btn {
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #061209;
+    background: var(--neon);
+    border: 1px solid var(--neon);
+    border-radius: 9px;
+    padding: 8px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 8px 20px -12px var(--neon-glow);
+  }
+  .update-alert .ua-btn:hover { filter: brightness(1.06); }
+  .update-alert .ua-close {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .update-alert .ua-close:hover { color: var(--text); border-color: var(--line-strong); }
+  @media (max-width: 700px) {
+    .update-alert { flex-wrap: wrap; padding: 10px 11px; gap: 8px; }
+    .update-alert .ua-icon { width: 28px; height: 28px; }
+    .update-alert .ua-title { font-size: 0.76rem; }
+    .update-alert .ua-text { font-size: 0.65rem; line-height: 1.65; }
+    .update-alert .ua-btn { flex: 1 1 auto; }
+    .update-alert .ua-close { order: -1; margin-inline-start: auto; }
+  }
+
 </style>
 </head>
 <body data-theme="neon" data-fx="auto">
@@ -21111,6 +21245,16 @@ ${PWA_HEAD_TAGS}
     </div>
     <button class="sa-btn" type="button" onclick="window.location.reload()">بررسی دوباره</button>
   </div>` : ''}
+
+  <div class="update-alert" id="updateAlert" role="status" aria-live="polite" hidden>
+    <span class="ua-icon">${icon('download')}</span>
+    <div class="ua-body">
+      <b class="ua-title">نسخهٔ جدید <span class="ua-ver" id="updateAlertVersion"></span> آماده است</b>
+      <span class="ua-text" id="updateAlertText">نسخهٔ تازه از مخزن رسمی منتشر شد. تغییرات و روش بروزرسانی را ببینید.</span>
+    </div>
+    <button class="ua-btn" type="button" data-act="open-update">${icon('refresh')} مشاهده و بروزرسانی</button>
+    <button class="ua-close" type="button" data-act="dismiss-update" aria-label="بستن اعلان نسخهٔ جدید">${icon('close')}</button>
+  </div>
 
   <!-- نوار تب‌ها: از منو جدا است و همهٔ صفحه‌ها را با یک کلیک عوض می‌کند -->
   <div class="tabbar" id="tabbar">
@@ -21325,39 +21469,51 @@ ${PWA_HEAD_TAGS}
         <button class="icon-btn" type="button" data-act="close-modal" data-modal="backupModal" aria-label="بستن">${icon('close')}</button>
       </div>
       <div class="modal-body">
-        <div class="card">
-          <h3>${icon('download')} ۱. تهیهٔ بکاپ کامل از کل پنل (ویژه ادمین)</h3>
-          <p class="help-lead" style="margin-bottom:10px;">شامل تمامی کاربران، شناسه‌های UUID، حجم مصرفی و تعداد ریکوئست‌ها، تنظیمات اختصاصی هر کاربر، تنظیمات کلی هسته، و سکرت و آمار پروکسی تلگرام.</p>
-          <div class="toolbar">
-            <button class="btn primary" type="button" data-act="download-admin-backup">${icon('download')} دانلود فایل بکاپ کامل (JSON)</button>
-            <button class="btn" type="button" data-act="copy-admin-backup">${icon('copy')} کپی بکاپ کامل در حافظه</button>
+        <div class="backup-tabs" role="tablist" aria-label="بخش‌های بکاپ">
+          <button class="ftab is-active" type="button" role="tab" aria-selected="true" data-backup-tab="download">${icon('download')} دانلود بکاپ</button>
+          <button class="ftab" type="button" role="tab" aria-selected="false" data-backup-tab="restore">${icon('refresh')} بازیابی</button>
+          <button class="ftab" type="button" role="tab" aria-selected="false" data-backup-tab="users">${icon('users')} بکاپ کاربران</button>
+        </div>
+
+        <div class="backup-pane is-active" data-backup-pane="download">
+          <div class="card">
+            <h3>${icon('download')} تهیهٔ بکاپ کامل از کل پنل (ویژه ادمین)</h3>
+            <p class="help-lead" style="margin-bottom:10px;">شامل تمامی کاربران، شناسه‌های UUID، حجم مصرفی و تعداد ریکوئست‌ها، تنظیمات اختصاصی هر کاربر، تنظیمات کلی هسته، و سکرت و آمار پروکسی تلگرام.</p>
+            <div class="toolbar">
+              <button class="btn primary" type="button" data-act="download-admin-backup">${icon('download')} دانلود فایل بکاپ کامل (JSON)</button>
+              <button class="btn" type="button" data-act="copy-admin-backup">${icon('copy')} کپی بکاپ کامل در حافظه</button>
+            </div>
           </div>
         </div>
 
-        <div class="card">
-          <h3>${icon('refresh')} ۲. بازیابی اطلاعات از فایل بکاپ (Restore)</h3>
-          <p class="help-lead" style="margin-bottom:8px;">فایل بکاپ JSON قبلی خود را انتخاب کنید تا کاربران، سهمیه‌ها، تنظیمات و پروکسی تلگرام فوراً در دیتابیس D1 بازیابی شوند:</p>
-          <div class="backup-file-box">
-            <input type="file" id="backupFileInput" accept=".json,application/json">
-            <div class="form-grid" style="margin-top:4px;">
-              <div class="field">
-                <label>حالت بازیابی</label>
-                <select id="backupRestoreMode">
-                  <option value="merge" selected>ادغام با اطلاعات فعلی (پیشنهادی)</option>
-                  <option value="replace">جایگزینی کامل کاربران فعلی با فایل بکاپ</option>
-                </select>
+        <div class="backup-pane" data-backup-pane="restore">
+          <div class="card">
+            <h3>${icon('refresh')} بازیابی اطلاعات از فایل بکاپ (Restore)</h3>
+            <p class="help-lead" style="margin-bottom:8px;">فایل بکاپ JSON قبلی خود را انتخاب کنید تا کاربران، سهمیه‌ها، تنظیمات و پروکسی تلگرام فوراً در دیتابیس D1 بازیابی شوند:</p>
+            <div class="backup-file-box">
+              <input type="file" id="backupFileInput" accept=".json,application/json">
+              <div class="form-grid" style="margin-top:4px;">
+                <div class="field">
+                  <label>حالت بازیابی</label>
+                  <select id="backupRestoreMode">
+                    <option value="merge" selected>ادغام با اطلاعات فعلی (پیشنهادی)</option>
+                    <option value="replace">جایگزینی کامل کاربران فعلی با فایل بکاپ</option>
+                  </select>
+                </div>
+              </div>
+              <div class="toolbar" style="margin-top:6px;">
+                <button class="btn primary" type="button" id="restoreBackupBtn" data-act="restore-admin-backup">${icon('check')} شروع بازیابی بکاپ</button>
               </div>
             </div>
-            <div class="toolbar" style="margin-top:6px;">
-              <button class="btn primary" type="button" id="restoreBackupBtn" data-act="restore-admin-backup">${icon('check')} شروع بازیابی بکاپ</button>
-            </div>
           </div>
         </div>
 
-        <div class="card">
-          <h3>${icon('users')} ۳. دانلود بکاپ تکی هر کاربر</h3>
-          <p class="help-lead" style="margin-bottom:8px;">هر کاربر نیز در هدر صفحهٔ وضعیت اختصاصی خود (<code>/status/UUID</code>) دکمهٔ مستقیم «بکاپ اشتراک» دارد. همچنین از اینجا می‌توانید بکاپ هر کاربر را جداگانه دریافت کنید:</p>
-          <div class="toolbar" id="backupUsersList"></div>
+        <div class="backup-pane" data-backup-pane="users">
+          <div class="card">
+            <h3>${icon('users')} دانلود بکاپ تکی هر کاربر</h3>
+            <p class="help-lead" style="margin-bottom:8px;">هر کاربر نیز در هدر صفحهٔ وضعیت اختصاصی خود (<code>/status/UUID</code>) دکمهٔ مستقیم «بکاپ اشتراک» دارد. همچنین از اینجا می‌توانید بکاپ هر کاربر را جداگانه دریافت کنید:</p>
+            <div class="toolbar" id="backupUsersList"></div>
+          </div>
         </div>
       </div>
       <div class="modal-foot">
@@ -22260,7 +22416,7 @@ ${PWA_HEAD_TAGS}
       '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=singbox">' + ICO.copy + ' sing-box</button>' +
       '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=conf">' + ICO.copy + ' WireGuard</button>' +
       '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=base64">' + ICO.copy + ' base64</button>' +
-      '<a class="btn sm ghost" href="' + ep + '?format=zip">' + ICO.zip + ' ZIP</a>' +
+      '<a class="btn sm ghost" href="' + ep + '?format=zip" download="miliconfig-warp.zip">' + ICO.zip + ' ZIP</a>' +
       '</div></div>' +
       '<div class="loc-card"><div><div class="loc-name">OpenVPN</div><div class="loc-meta">.ovpn · 3 پروفایل تنظیم · ZIP</div></div>' +
       '<div class="toolbar">' +
@@ -23025,8 +23181,8 @@ ${PWA_HEAD_TAGS}
         { key: 'alpn', section: 'امنیت', label: 'پروتکل‌های لایهٔ انتقال (ALPN)', type: 'select', def: '', options: [['', 'خودکار'], ['h2,http/1.1', 'h2 + http/1.1'], ['h3,h2,http/1.1', 'h3 + h2 + http/1.1']] },
         { key: 'fp', section: 'امنیت', label: 'اثر انگشت TLS', type: 'select', def: 'chrome', options: 'fingerprints' },
         { key: 'patt', section: 'انتقال و فرگمنت', label: 'مسیر WebSocket', type: 'select', def: '/?ed=2048', options: 'pathPatterns' },
-        { key: 'ports', section: 'انتقال و فرگمنت', label: 'پورت‌های امن (TLS)', type: 'text', def: '443', list: 'dlPorts', ph: '443' },
-        { key: 'httpPorts', section: 'انتقال و فرگمنت', label: 'پورت‌های HTTP', type: 'text', def: '80', list: 'dlHttpPorts', ph: '80 — خالی برای حذف' },
+        { key: 'ports', section: 'انتقال و فرگمنت', label: 'پورت‌های امن (TLS)', type: 'portChips', tls: true, def: '443', hint: 'همهٔ پورت‌های HTTPS کلادفلر؛ هر تعداد را که بخواهید انتخاب کنید.' },
+        { key: 'httpPorts', section: 'انتقال و فرگمنت', label: 'پورت‌های HTTP', type: 'portChips', tls: false, def: '80', hint: 'پورت‌های HTTP اختیاری‌اند؛ برای حذف کامل، «پاک کردن» را بزنید.' },
         { key: 'tcp', section: 'انتقال و فرگمنت', label: 'TCP سریع', hint: 'tcp-concurrent و tcp-fast-open در کانفیگ کلاینت', type: 'switch', def: 'yes' },
         { key: 'udp', section: 'انتقال و فرگمنت', label: 'عبور UDP', hint: 'نودها UDP را عبور می‌دهند (بازی و تماس)', type: 'switch', def: 'yes' },
         { key: 'frag', section: 'انتقال و فرگمنت', label: 'فرگمنت TLS', type: 'switch', def: 'yes' },
@@ -23219,12 +23375,57 @@ ${PWA_HEAD_TAGS}
       return '<div class="field"><label>' + field.label + '</label>' +
         '<select id="' + id + '" data-uf="' + field.key + '">' + optionHtml(field, val) + '</select>' + hint + '</div>';
     }
+    if (field.type === 'portChips') {
+      var selectedPorts = String(val || '').split(/[,\s]+/).filter(Boolean);
+      var portChoices = (INITIAL_DATA.portChoices || []).filter(function(c) { return field.tls ? c.tls : !c.tls; });
+      var chips = portChoices.map(function(c) {
+        var on = selectedPorts.indexOf(String(c.port)) !== -1;
+        return '<label class="port-chip' + (on ? ' is-on' : '') + '">' +
+          '<input type="checkbox" data-port-pick="' + field.key + '" value="' + c.port + '"' + (on ? ' checked' : '') + ' aria-label="پورت ' + c.port + '">' +
+          '<b>' + c.port + '</b><small>' + (c.tls ? 'TLS' : 'HTTP') + '</small></label>';
+      }).join('');
+      return '<div class="field port-field" data-port-field="' + field.key + '">' +
+        '<label>' + field.label + '</label>' +
+        '<input type="hidden" id="' + id + '" data-uf="' + field.key + '" value="' + selectedPorts.join(',') + '">' +
+        '<div class="port-chips">' + chips + '</div>' +
+        '<div class="port-actions">' +
+          '<button class="port-mini" type="button" data-port-all="' + field.key + '">انتخاب همه</button>' +
+          '<button class="port-mini" type="button" data-port-none="' + field.key + '">پاک کردن</button>' +
+          '<span class="port-hint">' + (field.tls ? 'حداقل یکی؛ خالی = 443' : 'اختیاری') + '</span>' +
+        '</div>' + hint + '</div>';
+    }
     var attrs = 'type="' + (field.type === 'number' ? 'number' : 'text') + '" id="' + id + '" data-uf="' + field.key + '"';
     if (field.type === 'number') attrs += ' min="' + (field.min === undefined ? 0 : field.min) + '" max="' + (field.max === undefined ? 999 : field.max) + '" step="1"';
     if (field.list) attrs += ' list="' + field.list + '"';
     if (field.ph) attrs += ' placeholder="' + field.ph.replace(/"/g, '&quot;') + '"';
     return '<div class="field"><label>' + field.label + '</label>' +
       '<input ' + attrs + ' value="' + String(val === undefined ? '' : val).replace(/"/g, '&quot;') + '">' + hint + ipPoolControlHtml(field) + '</div>';
+  }
+
+  // پورت‌های کلادفلر فقط از فهرست انتخاب می‌شوند؛ مقدار نهایی به‌صورت
+  // رشتهٔ کاماجدا در input مخفی نگه داشته می‌شود تا collectUserForm آن را بخواند.
+  function syncPortChips(fieldKey) {
+    var field = document.querySelector('.port-field[data-port-field="' + fieldKey + '"]');
+    if (!field) return;
+    var values = [];
+    field.querySelectorAll('input[data-port-pick]').forEach(function(input) {
+      if (input.checked) values.push(input.value);
+    });
+    values.sort(function(a, b) { return Number(a) - Number(b); });
+    var hidden = field.querySelector('input[data-uf]');
+    if (hidden) hidden.value = values.join(',');
+    field.querySelectorAll('.port-chip').forEach(function(chip) {
+      var cb = chip.querySelector('input[data-port-pick]');
+      chip.classList.toggle('is-on', Boolean(cb && cb.checked));
+    });
+    updateFormSummary();
+  }
+
+  function setAllPortChips(fieldKey, checked) {
+    var field = document.querySelector('.port-field[data-port-field="' + fieldKey + '"]');
+    if (!field) return;
+    field.querySelectorAll('input[data-port-pick]').forEach(function(input) { input.checked = checked; });
+    syncPortChips(fieldKey);
   }
 
   function formPaneHtml(group, cfg) {
@@ -23357,6 +23558,9 @@ ${PWA_HEAD_TAGS}
         config[key] = String(el.value || '').trim();
       });
     }
+    // اگر مدیر همهٔ پورت‌های TLS را پاک کرد، 443 به‌عنوان پورت پیش‌فرض
+    // بازمی‌گردد تا کاربر بدون هیچ پورت امنی ساخته نشود.
+    if (!String(config.ports || '').trim()) config.ports = '443';
     var val = function(id, fallback) { return $(id) ? String($(id).value || '').trim() : fallback; };
     return {
       username: val('uf_username', ''),
@@ -23640,17 +23844,37 @@ ${PWA_HEAD_TAGS}
     }
     if ($('updScript')) $('updScript').textContent = (info && info.scriptName) || 'تشخیص خودکار';
 
-    var hasUpdate = Boolean(info && info.updateAvailable);
+    if (!info || info.success === false || info.error) {
+      setUpdateState('بررسی ناموفق — دوباره تلاش کنید', 'error');
+      if (!silent) showToast((info && info.error) || 'بررسی بروزرسانی ناموفق بود', 'err');
+      return;
+    }
+
+    var hasUpdate = Boolean(info.updateAvailable);
     var updateBtn = $('updateBtn');
     if (updateBtn) updateBtn.classList.toggle('has-update', hasUpdate);
     var updateDot = $('updateDot');
     if (updateDot) updateDot.hidden = !hasUpdate;
 
-    if (!info || info.success === false) {
-      setUpdateState('بررسی ناموفق — دوباره تلاش کنید', 'error');
-      if (!silent) showToast((info && info.error) || 'بررسی بروزرسانی ناموفق بود', 'err');
-      return;
+    // بنر نسخهٔ جدید: تا وقتی همین نسخه بسته نشده، بالای پنل می‌ماند؛ با
+    // انتشار نسخهٔ بعدی، مقدار latest عوض می‌شود و دوباره نمایش داده می‌شود.
+    var updateAlert = $('updateAlert');
+    if (updateAlert) {
+      var latestLabel = info.latest ? String(info.latest) : '';
+      var dismissedVersion = lsGet('mili_update_dismissed') || '';
+      var showAlert = hasUpdate && dismissedVersion !== latestLabel;
+      updateAlert.hidden = !showAlert;
+      if (showAlert) {
+        var alertVer = $('updateAlertVersion');
+        if (alertVer) alertVer.textContent = latestLabel ? 'v' + latestLabel : '';
+        var alertText = $('updateAlertText');
+        if (alertText) {
+          alertText.textContent = 'نسخهٔ نصب‌شده v' + (info.current || '—') +
+            ' است؛ تغییرات و روش بروزرسانی را ببینید.';
+        }
+      }
     }
+
     if (hasUpdate) {
       setUpdateState('نسخهٔ تازه موجود است', 'available');
       if (!silent) showToast('نسخهٔ ' + info.latest + ' آماده است', 'ok');
@@ -23697,14 +23921,7 @@ ${PWA_HEAD_TAGS}
   // بروزرسانی بدون هیچ ورودی حسابی: فایل نسخهٔ تازه به‌صورت دانلود ذخیره می‌شود
   // (قبلاً فایل خام _worker.js در تب جدید باز می‌شد و کاربر یک صفحهٔ کد می‌دید)
   function downloadUpdateBundle() {
-    var link = document.createElement('a');
-    link.href = origin() + API_BASE + '/api/update-bundle';
-    link.setAttribute('download', 'miliconfig-worker.js');
-    link.rel = 'noopener';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    showToast('فایل نسخهٔ تازه دانلود شد', 'ok');
+    downloadFile(origin() + API_BASE + '/api/update-bundle?t=' + Date.now(), 'miliconfig-worker.js', 'فایل نسخهٔ تازه دانلود شد');
   }
 
   // گزارش گام‌به‌گام وضعیت نصب خودکار (فقط خواندنی؛ چیزی را تغییر نمی‌دهد)
@@ -24336,21 +24553,67 @@ ${PWA_HEAD_TAGS}
     }).join('');
   }
 
+  function switchBackupTab(id) {
+    var modal = $('backupModal');
+    if (!modal) return;
+    modal.querySelectorAll('[data-backup-tab]').forEach(function(btn) {
+      var on = btn.getAttribute('data-backup-tab') === id;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    modal.querySelectorAll('[data-backup-pane]').forEach(function(pane) {
+      pane.classList.toggle('is-active', pane.getAttribute('data-backup-pane') === id);
+    });
+  }
+
   function openBackupModal() {
     toggleDrawer(false);
     renderBackupUsersList();
+    switchBackupTab('download');
     openModal('backupModal');
     if (typeof enhanceAllCustomSelects === 'function') enhanceAllCustomSelects($('backupModal'));
   }
 
+  // دانلود مطمئن: پاسخ را اول بررسی می‌کنیم؛ اگر خطای احراز هویت یا سرور
+  // برگشت، به‌جای ذخیرهٔ یک فایل خراب، پیام واقعی را نشان می‌دهیم.
+  function downloadFile(url, fallbackName, okMessage) {
+    var fileName = String(fallbackName || 'download');
+    fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+      .then(function(res) {
+        if (!res.ok) {
+          return res.text().then(function(text) {
+            var msg = String(text || '').trim();
+            try {
+              var parsed = JSON.parse(msg);
+              msg = parsed.message || parsed.error || msg;
+            } catch (_e) {}
+            throw new Error(msg || ('HTTP ' + res.status));
+          });
+        }
+        var disposition = res.headers.get('Content-Disposition') || '';
+        var matched = /filename="?([^";]+)"?/i.exec(disposition);
+        if (matched && matched[1]) fileName = matched[1];
+        return res.blob().then(function(blob) {
+          var blobUrl = URL.createObjectURL(blob);
+          var link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = fileName;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 5000);
+          if (okMessage) showToast(okMessage, 'ok');
+        });
+      })
+      .catch(function(err) {
+        showToast('دانلود ناموفق بود: ' + (err && err.message ? err.message : 'خطای شبکه'), 'err');
+      });
+  }
+
   function downloadAdminBackup() {
-    var link = document.createElement('a');
-    link.href = origin() + API_BASE + '/api/backup?t=' + Date.now();
-    link.setAttribute('download', 'miliconfig-full-backup-' + new Date().toISOString().slice(0, 10) + '.json');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    showToast('فایل بکاپ کامل پنل دانلود شد', 'ok');
+    var fileName = 'miliconfig-full-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    downloadFile(origin() + API_BASE + '/api/backup?t=' + Date.now(), fileName, 'فایل بکاپ کامل پنل دانلود شد');
   }
 
   function copyAdminBackup() {
@@ -24366,14 +24629,12 @@ ${PWA_HEAD_TAGS}
   }
 
   function downloadUserBackup(token) {
-    if (!token) return;
-    var link = document.createElement('a');
-    link.href = origin() + '/api/status/' + encodeURIComponent(token) + '/backup?backup=1';
-    link.setAttribute('download', 'miliconfig-user-' + token.slice(0, 8) + '-backup.json');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    showToast('بکاپ اختصاصی کاربر دانلود شد', 'ok');
+    if (!token) {
+      showToast('شناسهٔ کاربر برای بکاپ معتبر نیست', 'err');
+      return;
+    }
+    var fileName = 'miliconfig-user-' + String(token).slice(0, 8) + '-backup.json';
+    downloadFile(origin() + '/api/status/' + encodeURIComponent(token) + '/backup?backup=1&t=' + Date.now(), fileName, 'بکاپ اختصاصی کاربر دانلود شد');
   }
 
   function restoreAdminBackup() {
@@ -24475,6 +24736,9 @@ ${PWA_HEAD_TAGS}
     var formTab = event.target.closest('[data-uf-tab]');
     if (formTab) { switchUserFormTab(formTab.getAttribute('data-uf-tab')); return; }
 
+    var backupTab = event.target.closest('[data-backup-tab]');
+    if (backupTab) { switchBackupTab(backupTab.getAttribute('data-backup-tab')); return; }
+
     var helpTab = event.target.closest('[data-help-tab]');
     if (helpTab) {
       var helpTabId = helpTab.getAttribute('data-help-tab');
@@ -24496,6 +24760,11 @@ ${PWA_HEAD_TAGS}
     else if (act === 'toggle-drawer') { toggleDrawer(); }
     else if (act === 'close-drawer') { toggleDrawer(false); }
     else if (act === 'open-update') { openUpdateModal(); }
+    else if (act === 'dismiss-update') {
+      var updateAlertBox = $('updateAlert');
+      if (updateAlertBox) updateAlertBox.hidden = true;
+      if (lastUpdateInfo && lastUpdateInfo.latest) lsSet('mili_update_dismissed', String(lastUpdateInfo.latest));
+    }
     else if (act === 'check-update') { openUpdateModal(); }
     else if (act === 'apply-update') { applyUpdateNow(); }
     else if (act === 'diagnose-update') { diagnoseUpdate(); }
@@ -24621,9 +24890,32 @@ ${PWA_HEAD_TAGS}
     fillRandomFromIpPool(btn);
   });
 
+  // انتخاب/حذف گروهی پورت‌های کلادفلر در فرم کاربر
+  document.addEventListener('click', function(event) {
+    var btn = event.target && event.target.closest ? event.target.closest('[data-port-all], [data-port-none]') : null;
+    if (!btn) return;
+    event.preventDefault();
+    var key = btn.getAttribute('data-port-all') || btn.getAttribute('data-port-none');
+    setAllPortChips(key, btn.hasAttribute('data-port-all'));
+  });
+
+  // همهٔ لینک‌های دانلود مستقیم (WARP / OpenVPN / ZIP) از همان مسیر مطمئن
+  // عبور می‌کنند تا خطای ۴۰۳/۵۰۳ به‌جای فایل خراب، به‌صورت پیام دیده شود.
+  document.addEventListener('click', function(event) {
+    var link = event.target && event.target.closest ? event.target.closest('a[download][href]') : null;
+    if (!link) return;
+    if (link.origin !== window.location.origin) return;
+    event.preventDefault();
+    downloadFile(link.href, link.getAttribute('download') || '', 'دانلود شروع شد');
+  });
+
   document.addEventListener('change', function(event) {
     var target = event.target;
     if (!target) return;
+    if (target.matches && target.matches('input[data-port-pick]')) {
+      syncPortChips(target.getAttribute('data-port-pick'));
+      return;
+    }
     if (target.matches && target.matches('.switch input[data-key]')) {
       var key = target.getAttribute('data-key');
       if (key === 'frag' || key === 'ech') syncConditionalFields();
@@ -24697,6 +24989,8 @@ ${PWA_HEAD_TAGS}
 
   // بررسی بی‌صدای نسخه در پس‌زمینه (خروجی ۱۰ دقیقه کش می‌شود)
   setTimeout(function() { checkUpdate(true); }, 1200);
+  // نشست‌های طولانی بدون رفرش هم از نسخهٔ جدید باخبر شوند.
+  setInterval(function() { if (!document.hidden) checkUpdate(true); }, 30 * 60 * 1000);
 
   var hash = (window.location.hash || '').replace('#', '');
   if (hash && document.querySelector('[data-panel="' + hash + '"]')) showPanel(hash);

@@ -16,7 +16,9 @@
 
 import { VERSION } from '../config/defaults.js';
 
-const UPDATE_REPO = 'miladjahani/Miliconfigpro';
+// منبع واحد بروزرسانی: همین مخزن رسمی پروژه. همهٔ آینه‌ها هم از همین repo
+// ساخته می‌شوند تا نسخهٔ مستقرشده و version.json همیشه هم‌منبع باشند.
+const UPDATE_REPO = 'miladjahani/Milizeroooo';
 const UPDATE_BRANCH = 'main';
 export const UPDATE_MANIFEST_PATH = 'version.json';
 export const UPDATE_BUNDLE_PATH = '_worker.js';
@@ -27,9 +29,9 @@ function mirrorUrls(path, options = {}) {
   const clean = String(path || '').replace(/^\/+/, '');
   const bust = options.bust ? `?cb=${Date.now()}` : '';
   return [
-    `https://raw.githubusercontent.com/miladjahani/Milios3.10.2/${UPDATE_BRANCH}/${clean}${bust}`,
     `https://raw.githubusercontent.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}${bust}`,
-    `https://cdn.jsdelivr.net/gh/${UPDATE_REPO}@${UPDATE_BRANCH}/${clean}${bust}`
+    `https://cdn.jsdelivr.net/gh/${UPDATE_REPO}@${UPDATE_BRANCH}/${clean}${bust}`,
+    `https://raw.githack.com/${UPDATE_REPO}/${UPDATE_BRANCH}/${clean}${bust}`
   ];
 }
 

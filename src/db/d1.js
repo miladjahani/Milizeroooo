@@ -8,6 +8,7 @@ import {
   CONFIG_DEFAULTS,
   DEFAULT_ADMIN_UUID,
   MAX_USERS_LIMIT,
+  VERSION,
   getEnvConfigSnapshot,
   normalizeEffectiveConfig
 } from '../config/defaults.js';
@@ -1503,7 +1504,7 @@ export async function exportFullBackup(env = {}) {
 
   return {
     app: 'miliconfig-os',
-    version: 'v3.11.0',
+    version: VERSION,
     exportedAt: new Date().toISOString(),
     adminPath,
     globalConfig,
