@@ -37,6 +37,8 @@ function mirrorUrls(path, options = {}) {
 
 const MANIFEST_CACHE_MS = 10 * 60 * 1000;
 let manifestCache = { at: 0, value: null };
+const BUNDLE_CACHE_MS = 5 * 60 * 1000;
+let bundleCache = { at: 0, value: null, key: '' };
 
 // مقایسهٔ نسخه‌ها به‌صورت عددی: 3.10.0 > 3.9.9
 export function compareVersions(a = '', b = '') {
@@ -355,11 +357,18 @@ function cloudflareErrorDetail(status, data) {
 // دریافت باندل تازه (برای دانلود مستقیم فایل نسخهٔ جدید از پنل)
 export async function fetchLatestBundle(env = {}) {
   const customBundle = String(env?.UPDATE_BUNDLE_URL || '').trim();
+  const cacheKey = customBundle || 'default';
+  if (bundleCache.value && bundleCache.key === cacheKey && Date.now() - bundleCache.at < BUNDLE_CACHE_MS) {
+    return bundleCache.value;
+  }
+  // حداکثر ۱۲ ثانیه برای هر آینه و فقط یک دور؛ قبلاً ۲ دور × ۳ آینه × ۲۰ ثانیه
+  // باعث می‌شد دانلود از پنل تا چند دقیقه معلق بماند.
   const bundle = await fetchTextWithFallback(
     customBundle ? [customBundle, ...mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })] : mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true }),
-    { timeout: 20000 }
+    { timeout: 12000, rounds: 1 }
   );
   if (!bundle || !bundle.text || bundle.text.length < 50000) return null;
+  bundleCache = { at: Date.now(), value: bundle, key: cacheKey };
   return bundle;
 }
 
@@ -440,11 +449,7 @@ export async function applyUpdate(cfg = {}, env = {}, options = {}) {
     }
   }
 
-  const customBundle = String(env?.UPDATE_BUNDLE_URL || '').trim();
-  const bundle = await fetchTextWithFallback(
-    customBundle ? [customBundle, ...mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true })] : mirrorUrls(UPDATE_BUNDLE_PATH, { bust: true }),
-    { timeout: 20000 }
-  );
+  const bundle = await fetchLatestBundle(env);
   if (!bundle) return { success: false, error: 'دریافت باندل تازه از گیت‌هاب و آینه‌ها ناموفق بود.' };
   if (bundle.text.length < 50000) {
     return { success: false, error: 'باندل دریافتی معتبر نیست (حجم غیرمنتظره).' };

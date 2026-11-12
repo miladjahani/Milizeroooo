@@ -2208,8 +2208,9 @@ ${PWA_HEAD_TAGS}
   .uf-pane .field textarea:focus { border-color: var(--line-strong); box-shadow: 0 0 0 3px rgba(var(--neon-rgb), 0.08); }
   body.light-mode .uf-pane .field textarea { background: #ffffff; color: #0c1a12; }
   .field-hint { display: block; margin-top: 4px; font-size: 0.72rem; line-height: 1.7; opacity: 0.6; }
-  .port-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
-  .port-chip { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer; transition: 0.15s ease; font-size: 0.72rem; user-select: none; }
+  .port-field { grid-column: 1 / -1; }
+  .port-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 2px; }
+  .port-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: 100%; min-width: 0; padding: 6px 5px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer; transition: 0.15s ease; font-size: 0.72rem; user-select: none; white-space: nowrap; }
   .port-chip:hover { border-color: var(--line-strong); color: var(--text); }
   .port-chip input { position: absolute; opacity: 0; pointer-events: none; }
   .port-chip b { font-weight: 700; color: var(--text); direction: ltr; }
@@ -2221,8 +2222,19 @@ ${PWA_HEAD_TAGS}
   .port-mini:hover { color: var(--neon); border-color: rgba(var(--neon-rgb), 0.45); }
   .port-hint { font-size: 0.62rem; opacity: 0.5; }
   body.light-mode .port-chip { background: #ffffff; }
-  #createModal .port-chip { padding: 4px 7px; font-size: 0.66rem; }
-  #createModal .port-chip small { font-size: 0.54rem; }
+  #createModal .port-chip { padding: 5px 4px; font-size: 0.64rem; }
+  #createModal .port-chip small { font-size: 0.52rem; }
+  @media (max-width: 720px) {
+    .port-chips { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+    .port-chip { padding: 5px 3px; font-size: 0.64rem; }
+    .port-chip b { font-size: 0.68rem; }
+    .port-chip small { font-size: 0.52rem; }
+    .port-actions { gap: 5px; }
+    .port-hint { width: 100%; }
+  }
+  @media (max-width: 380px) {
+    .port-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
   .ip-pool { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px 9px; border: 1px dashed rgba(var(--info-rgb), 0.3); border-radius: 10px; background: rgba(var(--info-rgb), 0.045); }
   .ip-pool-title { font-size: 0.72rem; opacity: 0.75; }
   .ip-pool-count { width: 62px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.25); color: var(--text); font: inherit; font-size: 0.74rem; }
@@ -2293,12 +2305,16 @@ ${PWA_HEAD_TAGS}
   /* ---------- پنجرهٔ بروزرسانی ---------- */
   .update-card {
     width: min(430px, 100%);
+    display: flex;
+    flex-direction: column;
+    max-height: min(92dvh, 860px);
     border-color: rgba(var(--neon-rgb), 0.36);
     background:
       radial-gradient(420px 220px at 100% -10%, rgba(var(--neon-rgb), 0.14), transparent 68%),
       var(--bg-soft);
   }
-  .update-body { gap: 14px; }
+  .update-body { gap: 14px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .update-foot { flex: none; }
   .update-hero {
     display: flex;
     align-items: center;
@@ -3187,6 +3203,25 @@ ${PWA_HEAD_TAGS}
   #backupModal .card h3 { font-size: 0.76rem; margin-bottom: 6px; gap: 6px; }
   #backupModal .card h3 .mi { width: 15px; height: 15px; }
   #backupModal .help-lead { font-size: 0.7rem; line-height: 1.75; margin-bottom: 6px; }
+  #backupModal .backup-pane { min-height: 0; }
+  #backupModal .backup-pane .card { min-height: 0; display: flex; flex-direction: column; }
+  #backupUsersList {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 6px;
+    max-height: min(42vh, 320px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2px 3px 2px 0;
+  }
+  #backupUsersList .btn {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   #backupModal code { font-size: 0.66rem; }
   #backupModal .btn { font-size: 0.68rem; padding: 6px 10px; }
   #backupModal .btn .mi { width: 14px; height: 14px; }
@@ -3297,6 +3332,8 @@ ${PWA_HEAD_TAGS}
     #backupModal .modal-head b { font-size: 0.74rem !important; gap: 5px !important; }
     #backupModal .modal-head .icon-btn { width: 30px; height: 30px; }
     #backupModal .modal-body { padding: 8px 9px !important; gap: 6px !important; }
+    #backupUsersList { grid-template-columns: 1fr; max-height: 30vh; gap: 5px; }
+    #backupModal .backup-pane .card { overflow: hidden; }
     #backupModal .backup-tabs { padding: 4px !important; gap: 4px !important; }
     #backupModal .backup-tabs .ftab { font-size: 0.62rem !important; padding: 5px 4px !important; }
     #backupModal .backup-tabs .ftab .mi { width: 13px; height: 13px; }
@@ -4135,9 +4172,9 @@ ${PWA_HEAD_TAGS}
             <div class="help-card">
               <h4>${icon('gauge')} تعداد نود هر کاربر</h4>
               <ul>
-                <li>عدد نود در ساب همان کاربر تعیین می‌کند چند نود ساخته شود.</li>
-                <li>صفر یعنی سقف ندارد و همهٔ آدرس‌های زنده استفاده می‌شوند.</li>
-                <li>برای گوشی معمولاً ۳۰ تا ۶۰ نود کافی است؛ بیشتر از آن فقط لیست را شلوغ می‌کند.</li>
+                <li>حداقل ۱۰۰ نود برای هر کاربر ساخته می‌شود و با ویرایش همین عدد قابل تغییر است.</li>
+                <li>آدرس‌ها از همهٔ مخزن‌ها (IPv4، IPv6، دامنه، ProxyIP و SOCKS/HTTP) انتخاب می‌شوند.</li>
+                <li>هر کاربر آدرس‌های اختصاصی می‌گیرد؛ آدرس کاربران قبلی دوباره استفاده نمی‌شود.</li>
               </ul>
             </div>
           </div>
@@ -5434,14 +5471,14 @@ ${PWA_HEAD_TAGS}
     var out = [];
     if (c.es === 'yes' && c.frag === 'yes') out.push('Shadowsocks از فرگمنت پشتیبانی نمی‌کند؛ نودهای SS بدون fragment ساخته می‌شوند (مجاز است).');
     if (c.ech === 'yes' && !/^https:\\/\\//i.test(String(c.customDNS || ''))) out.push('ECH به یک DNS از نوع DoH (https://) نیاز دارد.');
-    if (c.ech === 'yes' && c.dkby === 'no') out.push('با فعال بودن ECH، پورت‌های HTTP خودکار حذف می‌شوند.');
+    if (c.ech === 'yes' && c.dkby === 'yes') out.push('ECH روشن است اما حذف پورت‌های HTTP هم فعال است؛ نودهای HTTP ساخته نمی‌شوند.');
     if (c.frag === 'yes' && (!c.fragmentPreset || c.fragmentPreset === 'off')) out.push('فرگمنت روشن است اما پریست روی «غیرفعال» است؛ پارامتری ساخته نمی‌شود.');
     if (c.epi === 'no' && c.epd === 'no' && !String(c.yx || '').trim()) out.push('همه منابع آدرس خاموش‌اند؛ سابلینک فقط از هاست ورکر ساخته می‌شود.');
     if (c.ev === 'no' && c.et === 'no' && c.ex === 'no' && c.es === 'no') out.push('هیچ پروتکلی روشن نیست؛ هسته به‌ناچار VLESS را فعال می‌کند.');
     if (String(c.s || '').trim() && !/^(socks5?|https?):\\/\\//i.test(String(c.s).trim())) out.push('آدرس پروکسی خروجی باید با socks5:// یا http:// شروع شود.');
     if (c.yxURL && c.egi === 'no') out.push('منبع آنلاین آدرس وارد شده اما گزینهٔ «منبع آنلاین آدرس» خاموش است.');
     var ports = String(c.ports || '').split(/[,\\s]+/).filter(Boolean).map(Number).filter(function(p) { return p >= 1 && p <= 65535; });
-    if (!ports.length) out.push('لیست پورت‌های نود خالی/نامعتبر است؛ از 443 استفاده می‌شود.');
+    if (ports.length < 3) out.push('لیست پورت‌های TLS کمتر از ۳ مورد است؛ پنل خودکار تکمیل می‌کند.');
     if (c.ipRotation && c.ipRotation !== 'off' && !String(c.yx || '').trim()) out.push('چرخش آی‌پی فعال است اما فهرست آدرس‌های دستی خالی است.');
     if (c.warpPro === 'yes' && !String(c.warpLicense || '').trim()) out.push('WARP پلاس روشن است اما لایسنس آن وارد نشده؛ نود با برچسب «بدون لایسنس» ساخته می‌شود.');
     return out;
@@ -5477,8 +5514,8 @@ ${PWA_HEAD_TAGS}
         { key: 'alpn', section: 'امنیت', label: 'پروتکل‌های لایهٔ انتقال (ALPN)', type: 'select', def: '', options: [['', 'خودکار'], ['h2,http/1.1', 'h2 + http/1.1'], ['h3,h2,http/1.1', 'h3 + h2 + http/1.1']] },
         { key: 'fp', section: 'امنیت', label: 'اثر انگشت TLS', type: 'select', def: 'chrome', options: 'fingerprints' },
         { key: 'patt', section: 'انتقال و فرگمنت', label: 'مسیر WebSocket', type: 'select', def: '/?ed=2048', options: 'pathPatterns' },
-        { key: 'ports', section: 'انتقال و فرگمنت', label: 'پورت‌های امن (TLS)', type: 'portChips', tls: true, def: '443', hint: 'همهٔ پورت‌های HTTPS کلادفلر؛ هر تعداد را که بخواهید انتخاب کنید.' },
-        { key: 'httpPorts', section: 'انتقال و فرگمنت', label: 'پورت‌های HTTP', type: 'portChips', tls: false, def: '80', hint: 'پورت‌های HTTP اختیاری‌اند؛ برای حذف کامل، «پاک کردن» را بزنید.' },
+        { key: 'ports', section: 'انتقال و فرگمنت', label: 'پورت‌های امن (TLS)', type: 'portChips', tls: true, def: '443,2053,2083', hint: 'حداقل ۳ پورت از فهرست HTTPS کلادفلر؛ همین پورت‌ها روی همهٔ نودها اعمال می‌شوند.' },
+        { key: 'httpPorts', section: 'انتقال و فرگمنت', label: 'پورت‌های HTTP', type: 'portChips', tls: false, def: '80,8080,8880', hint: 'حداقل ۳ پورت HTTP؛ برای هر آدرس علاوه بر نسخهٔ TLS یک نسخهٔ HTTP هم ساخته می‌شود.' },
         { key: 'tcp', section: 'انتقال و فرگمنت', label: 'TCP سریع', hint: 'tcp-concurrent و tcp-fast-open در کانفیگ کلاینت', type: 'switch', def: 'yes' },
         { key: 'udp', section: 'انتقال و فرگمنت', label: 'عبور UDP', hint: 'نودها UDP را عبور می‌دهند (بازی و تماس)', type: 'switch', def: 'yes' },
         { key: 'frag', section: 'انتقال و فرگمنت', label: 'فرگمنت TLS', type: 'switch', def: 'yes' },
@@ -5687,7 +5724,7 @@ ${PWA_HEAD_TAGS}
         '<div class="port-actions">' +
           '<button class="port-mini" type="button" data-port-all="' + field.key + '">انتخاب همه</button>' +
           '<button class="port-mini" type="button" data-port-none="' + field.key + '">پاک کردن</button>' +
-          '<span class="port-hint">' + (field.tls ? 'حداقل یکی؛ خالی = 443' : 'اختیاری') + '</span>' +
+          '<span class="port-hint">' + (field.tls ? 'حداقل ۳ پورت TLS' : 'حداقل ۳ پورت HTTP') + '</span>' +
         '</div>' + hint + '</div>';
     }
     var attrs = 'type="' + (field.type === 'number' ? 'number' : 'text') + '" id="' + id + '" data-uf="' + field.key + '"';
@@ -5813,8 +5850,9 @@ ${PWA_HEAD_TAGS}
       '<div class="field"><label>حجم مجاز (گیگابایت) — ۰ = نامحدود</label><input type="number" id="uf_dataLimitGb" min="0" step="1" list="dlDataLimit" value="' + Number((user && user.dataLimitGb) || 0) + '"></div>' +
       '<div class="field"><label>مدت اعتبار (روز) — ۰ = بدون انقضا</label><input type="number" id="uf_expireDays" min="0" step="1" list="dlExpireDays" value="' + Number((user && user.expireDays) || 0) + '"></div>' +
       '<div class="field"><label>سقف دستگاه متصل</label><input type="number" id="uf_ipLimit" min="1" max="200" step="1" value="' + Number((user && user.ipLimit) || 50) + '"></div>' +
+      '<div class="field"><label>تعداد نود در ساب‌لینک (حداقل ۱۰۰)</label><input type="number" id="uf_subNodeCount" min="100" max="2000" step="10" value="' + Math.max(100, Number((user && user.subNodeCount) || 100)) + '"></div>' +
       '</div>' +
-      '<div class="field" style="margin-top:10px;"><span class="field-hint">تعداد کانفیگ را خود پنل تعیین می‌کند؛ هر آدرس فعال از تب «آدرس‌ها و منطقه» به یک نود تبدیل می‌شود. برای قفل‌کردن نودها روی یک آی‌پی، همان‌جا حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
+      '<div class="field" style="margin-top:10px;"><span class="field-hint">تعداد کانفیگ را خود پنل از مجموع آدرس‌های فعال می‌سازد و با ویرایش همین عدد، تعداد نودهای ساب همان کاربر عوض می‌شود. برای قفل‌کردن نودها روی یک آی‌پی، از تب «آدرس‌ها و منطقه» حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
 
     var tabButton = function(id, label, iconName) {
       var on = activeTab === id;
@@ -5836,6 +5874,8 @@ ${PWA_HEAD_TAGS}
     if ($('userFormTitle')) $('userFormTitle').innerHTML = (user ? ICO.refresh + ' ویرایش کاربر «' + escHtml(user.username || '') + '»' : ICO.plus + ' ایجاد کاربر جدید');
     if ($('userFormSubmit')) $('userFormSubmit').innerHTML = user ? ICO.check + ' ذخیرهٔ تغییرات' : ICO.check + ' ساخت کاربر';
     enhanceAllCustomSelects(body);
+    // فرم جدید همیشه از بالای پنل باز شود، نه از موقعیت اسکرول فرم قبلی.
+    body.scrollTop = 0;
   }
 
   function collectUserForm() {
@@ -5856,7 +5896,7 @@ ${PWA_HEAD_TAGS}
     }
     // اگر مدیر همهٔ پورت‌های TLS را پاک کرد، 443 به‌عنوان پورت پیش‌فرض
     // بازمی‌گردد تا کاربر بدون هیچ پورت امنی ساخته نشود.
-    if (!String(config.ports || '').trim()) config.ports = '443';
+    if (!String(config.ports || '').trim()) config.ports = '443,2053,2083';
     var val = function(id, fallback) { return $(id) ? String($(id).value || '').trim() : fallback; };
     return {
       username: val('uf_username', ''),
@@ -5866,6 +5906,7 @@ ${PWA_HEAD_TAGS}
       dataLimitGb: Number(val('uf_dataLimitGb', '0')) || 0,
       expireDays: Number(val('uf_expireDays', '0')) || 0,
       ipLimit: Number(val('uf_ipLimit', '50')) || 50,
+      subNodeCount: Math.max(100, Number(val('uf_subNodeCount', '100')) || 100),
       config: config
     };
   }
@@ -5888,25 +5929,11 @@ ${PWA_HEAD_TAGS}
     var presets = INITIAL_DATA.presets || {};
     var p = presets[presetId] || presets['iran-fast'] || {};
     var baseCfg = Object.assign({}, INITIAL_DATA.defaults || {}, state.config || {}, (p && p.configOverrides) || {});
-    // هر دکمهٔ ساخت آماده، آی‌پی‌های اختصاصی خودش را از مخزن داخلی پنل برمی‌دارد؛
-    // بنابراین همهٔ کاربران آماده آدرس دستی از مخزن دارند و تنظیماتشان یکتا می‌ماند.
-    var pool = INITIAL_DATA.ipPool || [];
-    var poolNames = INITIAL_DATA.ipPoolCountryNames || {};
-    var poolCountries = String(p.poolCountries || '').toUpperCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-    var poolSource = poolCountries.length
-      ? pool.filter(function(item) { return poolCountries.indexOf(String(item.cc || '').toUpperCase()) !== -1; })
-      : pool.slice();
-    if (!poolSource.length) poolSource = pool.slice();
-    var picked = poolSource.slice();
-    for (var pi = picked.length - 1; pi > 0; pi--) {
-      var pj = Math.floor(Math.random() * (pi + 1));
-      var ptmp = picked[pi]; picked[pi] = picked[pj]; picked[pj] = ptmp;
-    }
-    picked = picked.slice(0, Math.min(Math.max(1, parseInt(p.poolCount, 10) || 6), picked.length));
-    if (picked.length) {
-      baseCfg.yx = picked.map(function(item) { return item.ip + ':443#' + (poolNames[item.cc] || item.cc); }).join(',');
-      baseCfg.yxby = 'no';
-    }
+    // پورت‌ها هنگام ساخت در سرور تصادفی انتخاب می‌شوند تا هر دکمه ترکیب متفاوتی بگیرد.
+    delete baseCfg.ports;
+    delete baseCfg.httpPorts;
+    // انتخاب آدرس‌های یکتا و ترکیب IPv4/IPv6/دامنه/ProxyIP در سرور انجام می‌شود
+    // تا دو کاربر هیچ آدرس مشترکی نگیرند و همهٔ مخزن‌ها سهم داشته باشند.
     var shortTag = {
       'iran-fast': 'fast',
       'pages-iran': 'pages',
@@ -5927,6 +5954,7 @@ ${PWA_HEAD_TAGS}
       dataLimitGb: Math.max(0, Number(p.dataLimitGb) || 0),
       expireDays: Math.max(0, parseInt(p.expireDays, 10) || 0),
       ipLimit: Math.max(1, parseInt(p.ipLimit, 10) || 50),
+      subNodeCount: 100,
       startOnFirstUse: p.startOnFirstUse !== false,
       nodeScope: p.nodeScope || 'all',
       config: baseCfg
@@ -6217,7 +6245,14 @@ ${PWA_HEAD_TAGS}
   // بروزرسانی بدون هیچ ورودی حسابی: فایل نسخهٔ تازه به‌صورت دانلود ذخیره می‌شود
   // (قبلاً فایل خام _worker.js در تب جدید باز می‌شد و کاربر یک صفحهٔ کد می‌دید)
   function downloadUpdateBundle() {
-    downloadFile(origin() + API_BASE + '/api/update-bundle?t=' + Date.now(), 'miliconfig-worker.js', 'فایل نسخهٔ تازه دانلود شد');
+    var btn = document.querySelector('[data-act="download-update"]');
+    if (btn && btn.disabled) return;
+    if (btn) btn.disabled = true;
+    setUpdateState('در حال دانلود فایل نسخهٔ تازه...', '');
+    var job = downloadFile(origin() + API_BASE + '/api/update-bundle?t=' + Date.now(), 'miliconfig-worker.js', 'فایل نسخهٔ تازه دانلود شد');
+    if (job && typeof job.finally === 'function') {
+      job.finally(function() { if (btn) btn.disabled = false; });
+    }
   }
 
   // گزارش گام‌به‌گام وضعیت نصب خودکار (فقط خواندنی؛ چیزی را تغییر نمی‌دهد)
@@ -6874,7 +6909,13 @@ ${PWA_HEAD_TAGS}
   // برگشت، به‌جای ذخیرهٔ یک فایل خراب، پیام واقعی را نشان می‌دهیم.
   function downloadFile(url, fallbackName, okMessage) {
     var fileName = String(fallbackName || 'download');
-    fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var abortTimer = controller ? setTimeout(function() { controller.abort(); }, 120000) : null;
+    return fetch(url, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: controller ? controller.signal : undefined
+    })
       .then(function(res) {
         if (!res.ok) {
           return res.text().then(function(text) {
@@ -6895,16 +6936,22 @@ ${PWA_HEAD_TAGS}
           link.href = blobUrl;
           link.download = fileName;
           link.style.display = 'none';
+          link.rel = 'noopener';
           document.body.appendChild(link);
           link.click();
-          link.remove();
-          setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 5000);
+          // حذف فوری لینک در iOS/Safari دانلود را لغو می‌کند؛ کمی صبر می‌کنیم.
+          setTimeout(function() { if (link.parentNode) link.parentNode.removeChild(link); }, 2000);
+          setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 120000);
           if (okMessage) showToast(okMessage, 'ok');
         });
       })
       .catch(function(err) {
-        showToast('دانلود ناموفق بود: ' + (err && err.message ? err.message : 'خطای شبکه'), 'err');
-      });
+        var reason = err && err.name === 'AbortError'
+          ? 'زمان دانلود تمام شد؛ دوباره تلاش کنید'
+          : (err && err.message ? err.message : 'خطای شبکه');
+        showToast('دانلود ناموفق بود: ' + reason, 'err');
+      })
+      .finally(function() { if (abortTimer) clearTimeout(abortTimer); });
   }
 
   function downloadAdminBackup() {

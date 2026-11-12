@@ -12,7 +12,8 @@ import {
   getEnvConfigSnapshot,
   normalizeEffectiveConfig
 } from '../config/defaults.js';
-import { buildUserDefaultConfig, USER_PRESETS } from '../config/presets.js';
+import { buildRandomUserAddressMix, buildUserDefaultConfig, USER_PRESETS } from '../config/presets.js';
+import { ensureSubscriptionPortVariety } from '../config/defaults.js';
 import { generateShortId, generateUuidV4, isValidUuid, sha256Hex, timingSafeEqualStr } from '../core/utils.js';
 
 // حافظه کش داخلی هر Isolate جهت کارکرد بدون وقفه و حداکثر سرعت
@@ -501,53 +502,17 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
 
     memoryStore.d1Error = schemaErrors.filter(Boolean).join(' | ') || null;
 
-    // بررسی وجود کاربر اولیه
-    const countRow = await db.prepare(`SELECT COUNT(*) as cnt FROM users`).first();
-    const totalUsers = Number(countRow?.cnt || 0);
-    if (totalUsers === 0) {
-      const adminUuid = generateSeedUuid();
-      const envSnap = getEnvConfigSnapshot(env);
-      const defaultUserConfig = buildUserDefaultConfig(envSnap, 'iran-fast', { subNodeCount: 0 });
-      const now = Date.now();
-      const firstId = generateShortId('mili');
+    // هیچ کاربر پیش‌فرضی هنگام راه‌اندازی ساخته نمی‌شود. فقط ردیف قدیمی
+    // نسخه‌های قبلی (با همان یادداشت مشخص) یک‌بار پاک می‌شود.
+    try {
       await safeBind(
-        db.prepare(
-          `INSERT OR IGNORE INTO users (
-            id, username, uuid, sub_node_count, status, enabled,
-            data_limit_gb, used_bytes, lifetime_bytes, request_count,
-            expire_days, expire_at, start_on_first_use, first_connected_at,
-            ip_limit, node_scope, preset, note, config_json, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ),
-        firstId,
-        firstId,
-        adminUuid,
-        0,
-        'active',
-        1,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        50,
-        'all',
-        'iran-fast',
-        'کاربر اولیه پیش‌فرض miliconfig',
-        JSON.stringify(defaultUserConfig),
-        now,
-        now
-      ).run();
-
-      await addAuditLog(env, 'ساخت خودکار دیتابیس D1', `${firstId} · iran-fast`, 'system');
-    }
+        db.prepare(`DELETE FROM users WHERE note = ?`).bind('کاربر اولیه پیش‌فرض miliconfig')
+      );
+    } catch (_cleanupErr) {}
 
     return { d1Enabled: true, bindingName, migrated: true, error: memoryStore.d1Error };
   } catch (err) {
-    // ساخت کاربر اولیه نباید D1 را از کار بیندازد؛ ستون‌های جدول قبلاً بررسی شده‌اند
+    // خطای پاک‌سازی کاربر قدیمی نباید D1 را از کار بیندازد؛ ستون‌های جدول قبلاً بررسی شده‌اند
     memoryStore.d1SchemaReady = true;
     memoryStore.d1Error = err?.message || String(err);
     return { d1Enabled: true, bindingName, migrated: true, error: memoryStore.d1Error };
@@ -557,44 +522,13 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
 function ensureMemorySeeded(env = {}) {
   if (memoryStore.initialized) return;
   memoryStore.initialized = true;
-  const adminUuid = generateSeedUuid();
   const envSnap = getEnvConfigSnapshot(env);
   memoryStore.globalConfig = { ...envSnap };
-
-  if (memoryStore.users.size === 0) {
-    const now = Date.now();
-    const firstId = 'mili-default';
-    const cfg = buildUserDefaultConfig(envSnap, 'iran-fast', { subNodeCount: 0 });
-    memoryStore.users.set(firstId, {
-      id: firstId,
-      username: firstId,
-      uuid: adminUuid,
-      subNodeCount: 0,
-      status: 'active',
-      enabled: true,
-      dataLimitGb: 0,
-      usedBytes: 0,
-      lifetimeBytes: 0,
-      requestCount: 0,
-      expireDays: 0,
-      expireAt: 0,
-      startOnFirstUse: true,
-      firstConnectedAt: 0,
-      ipLimit: 50,
-      nodeScope: 'all',
-      preset: 'iran-fast',
-      note: 'کاربر اولیه پیش‌فرض miliconfig',
-      config: cfg,
-      createdAt: now,
-      updatedAt: now
-    });
-    memoryStore.auditLogs.unshift({
-      id: 1,
-      action: 'راه‌اندازی اولیه سیستم',
-      detail: `${firstId} · iran-fast`,
-      ip: '127.0.0.1',
-      createdAt: now
-    });
+  // کاربر پیش‌فرض ساخته نمی‌شود؛ پنل با لیست خالی بالا می‌آید.
+  for (const [id, user] of memoryStore.users) {
+    if (user?.note === 'کاربر اولیه پیش‌فرض miliconfig' || id === 'mili-default') {
+      memoryStore.users.delete(id);
+    }
   }
 }
 
@@ -971,10 +905,23 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
   const username = rawName || id;
   const uuid = isValidUuid(payload.uuid) ? String(payload.uuid).trim().toLowerCase() : generateUuidV4();
 
-  const subNodeCountRaw = parseInt(payload.subNodeCount ?? payload.config?.subNodeCount ?? globalCfg.subNodeCount ?? 50, 10);
-  const subNodeCount = Number.isFinite(subNodeCountRaw) && subNodeCountRaw >= 0 ? subNodeCountRaw : 50;
+  const subNodeCountRaw = parseInt(payload.subNodeCount ?? payload.config?.subNodeCount ?? globalCfg.subNodeCount ?? 100, 10);
+  const subNodeCount = Number.isFinite(subNodeCountRaw) ? Math.max(100, subNodeCountRaw) : 100;
 
-  const mergedUserConfig = buildUserDefaultConfig(
+  // هر کاربر تازه، مجموعهٔ آدرس اختصاصی خودش را از مخزن می‌گیرد؛ آدرس‌های
+  // کاربران قبلی حذف می‌شوند تا دو کاربر آی‌پی یکسان نداشته باشند.
+  const manualYx = payload.yx ?? payload.config?.yx ?? '';
+  const manualYxURL = payload.yxURL ?? payload.config?.yxURL ?? '';
+  const addressMix = presetId === 'direct-only'
+    ? null
+    : buildRandomUserAddressMix({
+        existingUsers: currentUsers,
+        poolCountries: presetDef.poolCountries,
+        extraYx: manualYx,
+        extraYxURL: manualYxURL
+      });
+
+  const seededUserConfig = buildUserDefaultConfig(
     payload.usePanelDefaults !== false ? globalCfg : CONFIG_DEFAULTS,
     presetId,
     {
@@ -1020,9 +967,24 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
       fragmentInterval: payload.fragmentInterval ?? payload.config?.fragmentInterval ?? globalCfg.fragmentInterval ?? '10-20',
       fragmentPackets: payload.fragmentPackets ?? payload.config?.fragmentPackets ?? globalCfg.fragmentPackets ?? 'tlshello',
       ipRotation: payload.ipRotation ?? payload.config?.ipRotation ?? globalCfg.ipRotation ?? 15,
-      subNodeCount
+      subNodeCount,
+      ...(addressMix ? {
+        yx: addressMix.yx,
+        yxURL: addressMix.yxURL,
+        egi: 'yes',
+        epi: 'yes',
+        epd: 'yes',
+        yxby: 'no'
+      } : {})
     }
   );
+  const explicitPorts = payload.ports ?? payload.config?.ports;
+  const explicitHttpPorts = payload.httpPorts ?? payload.config?.httpPorts;
+  const mergedUserConfig = ensureSubscriptionPortVariety(seededUserConfig, {
+    // مقدار پیش‌فرض پنل به‌معنی انتخاب دستی نیست؛ در ساخت کاربر تصادفی می‌شود.
+    randomize: !explicitPorts || String(explicitPorts) === String(CONFIG_DEFAULTS.ports),
+    randomizeHttp: !explicitHttpPorts || String(explicitHttpPorts) === String(CONFIG_DEFAULTS.httpPorts)
+  });
 
   // مقادیر ارسالی کاربر اولویت دارند؛ در نبود آن‌ها تنظیمات اختصاصی همان پریست
   // اعمال می‌شود تا هر دکمهٔ ساخت سریع، سهمیه و محدودیت منحصربه‌فرد خودش را داشته باشد.
@@ -1122,12 +1084,12 @@ export async function updateUser(env = {}, userId, payload = {}, clientIp = '') 
   const now = Date.now();
 
   const subNodeCountRaw = parseInt(
-    payload.subNodeCount ?? payload.config?.subNodeCount ?? existing.subNodeCount ?? 50,
+    payload.subNodeCount ?? payload.config?.subNodeCount ?? existing.subNodeCount ?? 100,
     10
   );
-  const subNodeCount = Number.isFinite(subNodeCountRaw) && subNodeCountRaw >= 0 ? subNodeCountRaw : existing.subNodeCount;
+  const subNodeCount = Number.isFinite(subNodeCountRaw) ? Math.max(100, subNodeCountRaw) : 100;
 
-  const updatedConfig = normalizeEffectiveConfig({
+  const updatedConfig = ensureSubscriptionPortVariety(normalizeEffectiveConfig({
     ...existing.config,
     ...(payload.config || {}),
     ...(payload.wk !== undefined ? { wk: payload.wk } : {}),
@@ -1172,7 +1134,7 @@ export async function updateUser(env = {}, userId, payload = {}, clientIp = '') 
     ...(payload.fragmentPackets !== undefined ? { fragmentPackets: payload.fragmentPackets } : {}),
     ...(payload.ipRotation !== undefined ? { ipRotation: payload.ipRotation } : {}),
     subNodeCount
-  });
+  }), { randomize: false });
 
   const enabled = payload.enabled !== undefined ? Boolean(payload.enabled) : existing.enabled;
   const expireDays = payload.expireDays !== undefined ? Math.max(0, parseInt(payload.expireDays, 10) || 0) : existing.expireDays;

@@ -125,7 +125,11 @@ function check(name, pass, detail = '') {
 
   const ech = await build({ ech: 'yes', customDNS: 'https://1.1.1.1/dns-query', customECHDomain: 'cloudflare-ech.com' });
   check('ECH', tlsOnly(ech).every(l => (parseLink(l).searchParams.get('ech') || '').startsWith('cloudflare-ech.com+https://')));
-  check('ECH پورت HTTP را حذف می‌کند', ech.every(l => parseLink(l).port !== '80'));
+  check(
+    'ECH پورت HTTP را حذف نمی‌کند',
+    ech.some(l => ['80', '8080', '8880', '2052', '2082', '2086', '2095'].includes(parseLink(l).port)),
+    [...new Set(ech.map(l => parseLink(l).port))].join(',')
+  );
 
   const proxyIp = await build({ p: 'ProxyIP.DE.example.com:443' });
   check('آدرس واسط ProxyIP', tlsOnly(proxyIp).every(l => (parseLink(l).searchParams.get('path') || '').includes('p=ProxyIP.DE.example.com:443')));
@@ -138,6 +142,18 @@ function check(name, pass, detail = '') {
 {
   const manual = await build({ ena: 'no', epi: 'yes', yxby: 'no', yx: '104.16.0.9:2053#آلمان' });
   check('آدرس دستی', manual.some(l => parseLink(l).hostname === '104.16.0.9' && parseLink(l).port === '2053'));
+
+  const manualPorts = await build({
+    ena: 'no', epi: 'yes', epd: 'no', egi: 'no', yxby: 'no', yxURL: '',
+    ports: '2053,2083,2096', httpPorts: '8080,8880,2052',
+    yx: '104.16.0.11#a,104.16.0.12#b,104.16.0.13#c'
+  });
+  const selectedPorts = new Set(manualPorts.map(l => parseLink(l).port));
+  check(
+    'همهٔ پورت‌های TLS و HTTP انتخاب‌شده روی آدرس‌های دستی اعمال می‌شوند',
+    ['2053', '2083', '2096', '8080', '8880', '2052'].every(port => selectedPorts.has(port)),
+    [...selectedPorts].join(',')
+  );
 
   // منطقهٔ ذخیره‌شده باید بدون ?country هم مسیر خروج را عوض کند.
   const region = await build({ region: 'DE', sb: 'no', ena: 'yes', epi: 'no', epd: 'no', egi: 'no', yxby: 'yes', yx: '', p: '' });

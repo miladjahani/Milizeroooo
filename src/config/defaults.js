@@ -43,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.12.0';
+export const VERSION = 'v3.13.0';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // ساب‌لینک اصلی مدیر همیشه ۴۰۰ نود (همهٔ پروتکل‌ها و ترکیب‌های آدرس) دارد
@@ -119,9 +119,9 @@ export const CONFIG_DEFAULTS = {
   ipPinned: '', // آدرس دلخواه برای حالت ثابت: host یا host:port (خالی = انتخاب خودکار پایدار)
   locationNodeCount: 8, // تعداد نود چندلوکیشن که در ساب‌لینک کشوری ساخته می‌شود
   frag: 'yes', // کلید روشن/خاموش فرگمنت (شادوساکس فرگمنت ندارد)
-  ports: '443', // پورت‌های TLS نودهای ساب‌لینک (cfnew: فقط 443)
-  // پورت‌های بدون TLS که به‌عنوان «حالت دوم» هر نود ساخته می‌شوند؛ cfnew: 80
-  httpPorts: '80',
+  ports: '443,2053,2083', // پورت‌های TLS نودهای ساب‌لینک (حداقل ۳ پورت)
+  // پورت‌های بدون TLS که به‌عنوان «حالت دوم» هر نود ساخته می‌شوند (حداقل ۳ پورت)
+  httpPorts: '80,8080,8880',
   adminPasswordHash: '', // هش رمز عبور مدیر
   supportChannel: TELEGRAM_SUPPORT,
   // — نود دامنهٔ پنل: آدرس و SNI دقیقاً دامنهٔ همین ورکر/پیجز (بدون https://)
@@ -329,6 +329,81 @@ export function parseNodePorts(value = '') {
   return list.length ? list : [443];
 }
 
+// حداقل ۳ پورت TLS و ۳ پورت HTTP برای هر اشتراک؛ در ساخت کاربر، پورت‌ها
+// تصادفی از فهرست رسمی کلادفلر انتخاب می‌شوند تا هر کاربر ترکیب متفاوتی بگیرد.
+export function ensureSubscriptionPortVariety(config = {}, options = {}) {
+  const random = typeof options.random === 'function' ? options.random : Math.random;
+  const shuffle = (list) => {
+    const copy = list.slice();
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
+  const pick = (value, allowed, minimum, randomize) => {
+    const selected = [...new Set(parseNodePorts(value).filter(port => allowed.includes(port)))];
+    if (randomize && selected.length <= minimum) {
+      return shuffle(allowed).slice(0, Math.max(minimum, selected.length));
+    }
+    while (selected.length < minimum) {
+      const candidates = allowed.filter(port => !selected.includes(port));
+      if (!candidates.length) break;
+      selected.push(candidates[Math.floor(random() * candidates.length)]);
+    }
+    return selected;
+  };
+  return {
+    ...config,
+    ports: pick(config.ports, CF_HTTPS_PORTS, 3, options.randomize !== false).join(','),
+    httpPorts: pick(config.httpPorts, CF_HTTP_PORTS, 3, options.randomizeHttp !== false).join(',')
+  };
+}
+
+// نقاط پایانی اضافهٔ WARP که از طرف مدیر ارسال شده‌اند؛ همگی روی پورت ۲۴۰۸
+// (به‌جز دو نقطهٔ IPv6 با پورت ۴۱۷۷) و برای عبور از شبکه‌های سخت‌گیرانه.
+export const WARP_EXTRA_ENDPOINTS = [
+  { host: '188.114.97.240', port: 2408 },
+  { host: '162.159.195.165', port: 2408 },
+  { host: '8.39.125.158', port: 2408 },
+  { host: '162.159.192.78', port: 2408 },
+  { host: '8.34.146.185', port: 2408 },
+  { host: '188.114.98.224', port: 2408 },
+  { host: '8.39.125.200', port: 2408 },
+  { host: '188.114.97.39', port: 2408 },
+  { host: '8.35.211.206', port: 2408 },
+  { host: '8.39.125.211', port: 2408 },
+  { host: '188.114.98.107', port: 2408 },
+  { host: '8.34.70.62', port: 2408 },
+  { host: '162.159.195.0', port: 2408 },
+  { host: '8.6.112.212', port: 2408 },
+  { host: '8.6.112.197', port: 2408 },
+  { host: '162.159.195.76', port: 2408 },
+  { host: '8.6.112.168', port: 2408 },
+  { host: '8.39.125.46', port: 2408 },
+  { host: '8.39.214.176', port: 2408 },
+  { host: '8.39.214.18', port: 2408 },
+  { host: '162.159.195.163', port: 2408 },
+  { host: '8.39.125.185', port: 2408 },
+  { host: '8.39.214.184', port: 2408 },
+  { host: '188.114.98.104', port: 2408 },
+  { host: '8.34.146.186', port: 2408 },
+  { host: '8.47.69.202', port: 2408 },
+  { host: '8.6.112.53', port: 2408 },
+  { host: '188.114.98.4', port: 2408 },
+  { host: '8.47.69.78', port: 2408 },
+  { host: '8.34.70.149', port: 2408 },
+  { host: '8.39.125.201', port: 2408 },
+  { host: '8.34.70.252', port: 2408 },
+  { host: '188.114.99.190', port: 2408 },
+  { host: '8.6.112.232', port: 2408 },
+  { host: '188.114.96.93', port: 2408 },
+  { host: '8.47.69.160', port: 2408 },
+  { host: '8.47.69.185', port: 2408 },
+  { host: '2606:4700:d0:0:f268:a395:fe1b:3895', port: 4177 },
+  { host: '2606:4700:d1:0:9c3d:744e:2fea:8721', port: 2408 }
+];
+
 // منابع کشوری از رجیستری زندهٔ اسکنر (src/config/sources.js) ساخته می‌شوند؛
 // آدرس‌های ۴۰۴ (dimzon، بخشی از فایل‌های proxy_vip و …) از این استخر حذف شده‌اند.
 
@@ -532,9 +607,8 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   if (snap.ev === 'no' && snap.et === 'no' && snap.ex === 'no' && snap.es === 'no') {
     snap.ev = 'yes';
   }
-  if (snap.ech === 'yes') {
-    snap.dkby = 'yes';
-  }
+  // ECH فقط رمزنگاری TLS را فعال می‌کند و نباید پورت‌های HTTP را حذف کند؛
+  // حذف HTTP فقط با سوییچ صریح dkby انجام می‌شود.
   snap.alpn = normalizeAlpn(snap.alpn);
   const parsedCount = parseInt(snap.subNodeCount, 10);
   // ۰ = بدون سقف (موتور خودش تعداد نودها را تعیین می‌کند)

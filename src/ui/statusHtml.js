@@ -1362,7 +1362,13 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     // و به‌جای آن یک فایل خراب ذخیره نمی‌شود.
     function downloadFileUrl(url, fallbackName) {
       var fileName = String(fallbackName || 'download');
-      fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+      var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var abortTimer = controller ? setTimeout(function() { controller.abort(); }, 120000) : null;
+      fetch(url, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal: controller ? controller.signal : undefined
+      })
         .then(function(res) {
           if (!res.ok) {
             return res.text().then(function(text) {
@@ -1383,16 +1389,22 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
             a.href = blobUrl;
             a.download = fileName;
             a.style.display = 'none';
+            a.rel = 'noopener';
             document.body.appendChild(a);
             a.click();
-            a.remove();
-            setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 5000);
+            // حذف فوری لینک در iOS/Safari باعث لغو دانلود می‌شود.
+            setTimeout(function() { if (a.parentNode) a.parentNode.removeChild(a); }, 2000);
+            setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 120000);
             showToast('دانلود شروع شد');
           });
         })
         .catch(function(err) {
-          showToast('دانلود ناموفق بود: ' + (err && err.message ? err.message : 'خطای شبکه'));
-        });
+          var reason = err && err.name === 'AbortError'
+            ? 'زمان دانلود تمام شد؛ دوباره تلاش کنید'
+            : (err && err.message ? err.message : 'خطای شبکه');
+          showToast('دانلود ناموفق بود: ' + reason);
+        })
+        .finally(function() { if (abortTimer) clearTimeout(abortTimer); });
     }
 
     function downloadUserBackup() {

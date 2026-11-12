@@ -112,6 +112,29 @@ function createMockD1Database() {
             }
             return { success: true, meta: { changes: hit ? 1 : 0 } };
           }
+          if (s.startsWith('UPDATE users SET') && !s.startsWith('UPDATE users SET used_bytes')) {
+            const rows = getTableRows('users');
+            const [username, uuid, subNodeCount, status, enabled, dataLimitGb, expireDays, expireAt, startOnFirstUse, ipLimit, nodeScope, preset, note, configJson, updatedAt, id] = this._binds;
+            const hit = rows.find(r => r.id === id);
+            if (hit) {
+              hit.username = username;
+              hit.uuid = uuid;
+              hit.sub_node_count = subNodeCount;
+              hit.status = status;
+              hit.enabled = enabled;
+              hit.data_limit_gb = dataLimitGb;
+              hit.expire_days = expireDays;
+              hit.expire_at = expireAt;
+              hit.start_on_first_use = startOnFirstUse;
+              hit.ip_limit = ipLimit;
+              hit.node_scope = nodeScope;
+              hit.preset = preset;
+              hit.note = note;
+              hit.config_json = configJson;
+              hit.updated_at = updatedAt;
+            }
+            return { success: true, meta: { changes: hit ? 1 : 0 } };
+          }
           if (s.includes('DELETE FROM users')) {
             const rows = getTableRows('users');
             const id = this._binds[0];
@@ -385,6 +408,12 @@ async function runTests() {
     assert.strictEqual(createdData.user.username, 'reza-vip');
 
     const newUserUuid = createdData.user.uuid;
+    assert.ok(createdData.user.subNodeCount >= 100, 'کاربر ساخته‌شده باید حداقل ۱۰۰ نود داشته باشد');
+    assert.ok(String(createdData.user.config.yx || '').split(',').length >= 20, 'ترکیب آدرس‌های کاربر باید از چند نوع مخزن ساخته شود');
+    assert.ok(String(createdData.user.config.yx || '').includes('['), 'ترکیب آدرس باید IPv6 داشته باشد');
+    assert.ok(String(createdData.user.config.yx || '').includes('ProxyIP-'), 'ترکیب آدرس باید ProxyIP داشته باشد');
+    assert.match(String(createdData.user.config.yxURL || ''), /socks5/i, 'ترکیب آدرس باید فید SOCKS داشته باشد');
+    assert.match(String(createdData.user.config.yxURL || ''), /https?\.txt|https?:\/\//i, 'ترکیب آدرس باید فید HTTP داشته باشد');
     const subRawResp = await worker.fetch(
       new Request(`https://mili.pages.dev/sub/${newUserUuid}?target=raw`),
       d1Env,
@@ -393,7 +422,9 @@ async function runTests() {
     assert.strictEqual(subRawResp.status, 200);
     const rawLinksText = await subRawResp.text();
     const rawLines = rawLinksText.trim().split('\n').filter(Boolean);
-    assert.ok(rawLines.length >= 5, `تعداد نودهای تولیدشده باید حداقل ۵ نود باشد ولی ${rawLines.length} بود`);
+    assert.ok(rawLines.length >= 100, `تعداد نودهای تولیدشده باید حداقل ۱۰۰ نود باشد ولی ${rawLines.length} بود`);
+    const rawPorts = new Set(rawLines.map(line => new URL(line).port));
+    assert.ok(rawPorts.size >= 6, `باید حداقل ۳ پورت TLS و ۳ پورت HTTP در نودها باشد ولی ${[...rawPorts].join(',')} بود`);
 
     // هیچ نودی نباید مستقیماً به آدرس مسدودشدهٔ mili.pages.dev وصل شود؛ همه باید از آی‌پی/دامنه تمیز کلادفلر عبور کنند
     const vlessLines = rawLines.filter(l => l.startsWith('vless://'));
@@ -410,10 +441,10 @@ async function runTests() {
         const frag = parsed.searchParams.get('fragment') || '';
         assert.strictEqual(sni.toLowerCase(), 'mili.pages.dev', 'SNI باید به دامنهٔ ورکر اشاره کند');
         assert.notStrictEqual(sni, 'mili.pages.dev', 'SNI روی دامنهٔ pages.dev باید Mixed-Case ضد فیلترینگ باشد');
-        assert.ok(frag.length > 0, 'فرگمنت TLS باید روی دامنهٔ pages.dev فعال باشد');
+        assert.strictEqual(frag, '', 'پریست pages-iran باید بدون فرگمنت باشد؛ فقط یک دکمه فرگمنت دارد');
       }
     }
-    console.log('  ✓ تست ۴ (تولید نودهای ضد فیلتر قوی روی دامنهٔ مسدود *.pages.dev با آی‌پی تمیز، Mixed-Case SNI و TLS Fragment): موفق');
+    console.log('  ✓ تست ۴ (تولید ۱۰۰+ نود روی دامنهٔ مسدود *.pages.dev با آی‌پی تمیز، Mixed-Case SNI، ۳+۳ پورت و بدون فرگمنت): موفق');
 
     // تست ۵: تست کلاینت‌های Clash و Sing-box همراه با فرگمنت و Early Data
     const clashResp = await worker.fetch(
@@ -431,10 +462,10 @@ async function runTests() {
     );
     const sbJson = JSON.parse(await sbResp.text());
     assert.ok(
-      sbJson.outbounds.some(o => o.type === 'vless' && o.tls && o.tls.fragment === true),
-      'کانفیگ Sing-box باید شامل نود VLESS با tls.fragment فعال باشد'
+      sbJson.outbounds.some(o => o.type === 'vless' && o.tls && o.tls.fragment !== true),
+      'کانفیگ Sing-box باید نود VLESS بدون فرگمنت داشته باشد'
     );
-    console.log('  ✓ تست ۵ (تبدیل اشتراک Clash و Sing-box با پشتیبانی کامل از TLS Fragment و 0-RTT Early Data): موفق');
+    console.log('  ✓ تست ۵ (تبدیل اشتراک Clash و Sing-box با پشتیبانی از Early Data و قواعد فرگمنت): موفق');
 
     // تست ۶: قفل سخت‌گیرانه سقف ۳ کاربر (Hard Limit of Max 3 Users) و محافظت XSS در صفحه وضعیت
     await worker.fetch(
@@ -460,7 +491,7 @@ async function runTests() {
     const statusHtml = await statusPageResp.text();
     assert.strictEqual(statusHtml.includes('<script>alert(1)</script>'), false, 'تگ اسکریپت در نام کاربری باید Escape شود تا XSS رخ ندهد');
 
-    for (const uname of ['user-4', 'user-5']) {
+    for (const uname of ['user-4', 'user-5', 'user-6']) {
       const uResp = await worker.fetch(
         new Request(`https://mili.pages.dev/${adminUuid}/api/users`, {
           method: 'POST',
@@ -479,6 +510,41 @@ async function runTests() {
     assert.strictEqual(check5Data.users.length, 5, 'تعداد کل کاربران باید دقیقاً ۵ کاربر باشد');
     const rezaUser = check5Data.users.find(u => u.username === 'reza-vip');
     assert.ok(rezaUser && Number(rezaUser.requestCount) >= 3, 'شمارندهٔ ریکوئست ساب‌لینک کاربر اصلی باید دقیق محاسبه و ثبت شود');
+
+    // دو کاربر نباید آدرس مشترک داشته باشند و فقط پریست iran-fast باید فرگمنت بسازد.
+    const user4 = check5Data.users.find(u => u.username === 'user-4');
+    assert.ok(user4 && Number(user4.subNodeCount) >= 100, 'کاربر با پریست پیش‌فرض باید حداقل ۱۰۰ نود داشته باشد');
+    const user4Raw = await (await worker.fetch(
+      new Request(`https://mili.pages.dev/sub/${user4.uuid}?target=raw`),
+      d1Env, {}
+    )).text();
+    const user4Lines = user4Raw.trim().split('\n').filter(Boolean);
+    const rezaRaw = await (await worker.fetch(
+      new Request(`https://mili.pages.dev/sub/${rezaUser.uuid}?target=raw`),
+      d1Env, {}
+    )).text();
+    const rezaHosts = new Set(rezaRaw.trim().split('\n').filter(Boolean).map(line => new URL(line).hostname));
+    const sharedHosts = [...new Set(user4Lines.map(line => new URL(line).hostname))].filter(host => rezaHosts.has(host));
+    assert.strictEqual(sharedHosts.length, 0, `دو کاربر نباید آی‌پی مشترک داشته باشند: ${sharedHosts.slice(0, 5).join(',')}`);
+    assert.ok(user4Lines.some(line => (new URL(line).searchParams.get('fragment') || '').length > 0), 'پریست iran-fast باید فرگمنت داشته باشد');
+    assert.ok(user4Lines.length >= 100, `کاربر دوم نیز باید ۱۰۰+ نود داشته باشد ولی ${user4Lines.length} بود`);
+
+    // ویرایش تعداد نود باید بلافاصله روی همان ساب‌لینک اثر بگذارد (بدون کش قدیمی).
+    const editCountResp = await worker.fetch(
+      new Request(`https://mili.pages.dev/${adminUuid}/api/users`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+        body: JSON.stringify({ id: user4.id, subNodeCount: 120 })
+      }),
+      d1Env, {}
+    );
+    const editCountData = await editCountResp.json();
+    assert.strictEqual(editCountData.success, true, 'ویرایش تعداد نود باید موفق باشد');
+    const editedRaw = await (await worker.fetch(
+      new Request(`https://mili.pages.dev/sub/${user4.uuid}?target=raw`),
+      d1Env, {}
+    )).text();
+    assert.ok(editedRaw.trim().split('\n').filter(Boolean).length >= 120, 'تعداد نود پس از ویرایش باید به ۱۲۰ برسد');
 
     const user6Resp = await worker.fetch(
       new Request(`https://mili.pages.dev/${adminUuid}/api/users`, {

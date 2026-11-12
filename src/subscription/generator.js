@@ -25,6 +25,7 @@ import {
   WARP_DEFAULT_PORT,
   WARP_ENDPOINT_IPS,
   WARP_ENDPOINT_PORTS,
+  WARP_EXTRA_ENDPOINTS,
   WARP_PEER_PUBLIC_KEY,
   WARP_REGISTRATION_URL,
   WARP_CLIENT_VERSION,
@@ -191,9 +192,11 @@ export function buildFragmentValue(cfg = {}) {
 // با همین، هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ بدون TLS دارد و اگر یکی در
 // شبکهٔ کاربر فیلتر باشد دیگری کار می‌کند.
 export function buildPortVariants(cfg = {}, item = {}, index = 0) {
-  const disableNonTls = cfg.dkby === 'yes' || cfg.ech === 'yes';
+  const disableNonTls = cfg.dkby === 'yes';
+  // پورت آدرس‌های ترجیحی/مخزن فقط یک تزریق پیش‌فرض است؛ انتخاب کاربر در
+  // cfg.ports همیشه اولویت دارد. پورت صریح فقط برای سرور اصلی یا پروکسی معتبر است.
   const explicit = Number(item?.port) || 0;
-  if (explicit) {
+  if (explicit && item?.portLocked) {
     return [{ port: explicit, tls: !CF_HTTP_PORTS.includes(explicit) }];
   }
   const tlsPorts = parseNodePorts(cfg.ports).filter(port => !CF_HTTP_PORTS.includes(port));
@@ -298,6 +301,22 @@ function balanceComboEntries(entries = [], limit = 0) {
     }
     pending = next;
   }
+  // اگر گروه‌های کوچک (مثل IPv6 یا دامنه) سهمیهٔ خود را زودتر تمام کنند،
+  // بقیهٔ ظرفیت از گروه‌های بزرگ پر می‌شود تا سقف نود واقعاً پر شود.
+  let guardFill = 0;
+  while (remaining > 0 && guardFill++ < target * 2) {
+    let progressed = false;
+    for (const key of keys) {
+      if (remaining <= 0) break;
+      const bucket = groups.get(key);
+      if (quota.get(key) < bucket.length) {
+        quota.set(key, quota.get(key) + 1);
+        remaining -= 1;
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+  }
 
   const queues = keys.map(key => groups.get(key).slice(0, quota.get(key)));
   const out = [];
@@ -340,7 +359,21 @@ export function filterAddressFamily(list, cfg = {}) {
 export function getStaticCfAddresses(cfg = {}) {
   const v4 = cfg.ipv4 === 'no' ? [] : OFFICIAL_DIRECT_IPS.slice();
   const v6 = cfg.ipv6 === 'no' ? [] : OFFICIAL_DIRECT_IPV6.slice();
-  return [...v4, ...v6];
+  // آدرس‌های دستی هر کاربر هم به استخر ثابت اضافه می‌شوند تا نودهای زنجیره‌ای
+  // پروکسی روی همان آی‌پی‌های اختصاصی کاربر بنشینند، نه آی‌پی مشترک همه.
+  const manual = parseCustomPreferredString(cfg.yx);
+  const manualV4 = cfg.ipv4 === 'no' ? [] : manual.ipList.map(item => item.ip).filter(ip => !String(ip).includes(':'));
+  const manualV6 = cfg.ipv6 === 'no' ? [] : manual.ipList.map(item => item.ip).filter(ip => String(ip).includes(':'));
+  const manualDomains = manual.domainList.map(item => item.domain).filter(Boolean);
+  // اگر کاربر آدرس دستی دارد، همان‌ها مبنا هستند تا هیچ آی‌پی رسمی مشترکی
+  // بین دو کاربر در نودهای زنجیره‌ای تکرار نشود.
+  if (manualV4.length || manualV6.length || manualDomains.length) {
+    // IPv6 دستی برای نود مستقیم استفاده می‌شود؛ در زنجیرهٔ پروکسی فقط IPv4/دامنه
+    // می‌آید تا آدرس مشترک تصادفی از فیدها بین کاربران تکرار نشود.
+    const chainAddresses = [...manualV4, ...manualDomains];
+    return [...new Set(chainAddresses.length ? chainAddresses : manualV6)];
+  }
+  return [...new Set([...v4, ...v6])];
 }
 
 // ساخت نودهای چندلوکیشن: آدرس = آی‌پی ثابت CF، و پروکسی کشور از طریق ?s= در مسیر ws
@@ -393,9 +426,10 @@ export function buildLocationSourceList(proxyPool = [], cfg = {}, fallbackHost =
     });
   }
 
-  // تضمین حضور حداقل یک نود IPv6 وقتی کاربر IPv6 را فعال کرده است
+  // تضمین حضور حداقل یک نود IPv6 فقط برای کاربران بدون آدرس دستی؛ در حالت
+  // آدرس اختصاصی، IPv6 خود کاربر استفاده می‌شود تا آدرس رسمی مشترک تکرار نشود.
   const v6Only = OFFICIAL_DIRECT_IPV6;
-  if (cfg.ipv6 !== 'no' && v6Only.length > 0 && !out.some(n => isIpv6Literal(n.ip))) {
+  if (!String(cfg.yx || '').trim() && cfg.ipv6 !== 'no' && v6Only.length > 0 && !out.some(n => isIpv6Literal(n.ip))) {
     out[out.length - 1].ip = v6Only[0];
   }
   return out;
@@ -421,8 +455,23 @@ export function parseCustomPreferredString(yxStr = '') {
     .map(x => x.trim())
     .filter(Boolean);
   for (const item of items) {
-    // خطوط پروکسی (socks5://...) آدرس نود نیستند و نباید در لیست آی‌پی ترجیحی بیایند
-    if (item.includes('://')) continue;
+    // خطوط پروکسی (socks5://... یا https://...) آدرس نود نیستند و به‌عنوان
+    // پروکسی خروجی زنجیره‌ای به proxyList اضافه می‌شوند.
+    const proxyMatch = item.match(/^(socks5|socks4|socks|http|https):\/\/(.+)$/i);
+    if (proxyMatch) {
+      let scheme = proxyMatch[1].toLowerCase();
+      if (scheme === 'socks') scheme = 'socks5';
+      let rest = proxyMatch[2].trim();
+      let name = '';
+      if (rest.includes('#')) {
+        const hashIdx = rest.indexOf('#');
+        name = rest.slice(hashIdx + 1).trim();
+        rest = rest.slice(0, hashIdx).trim();
+      }
+      rest = rest.split('/')[0].trim();
+      if (rest) proxyList.push({ proxy: `${scheme}://${rest}`, name: name || rest, unverified: true });
+      continue;
+    }
     let nodeName = '';
     let addrPart = item;
     if (item.includes('#')) {
@@ -441,9 +490,9 @@ export function parseCustomPreferredString(yxStr = '') {
       continue;
     }
     if (isValidIpAddress(address)) {
-      ipList.push({ ip: address, port: port || 443, isp: nodeName, name: nodeName });
+      ipList.push({ ip: address, port: port || 443, isp: nodeName, name: nodeName, portLocked: Boolean(port && port !== 443) });
     } else if (isValidDomain(address) || address.includes('.')) {
-      domainList.push({ domain: address, port: port || 443, name: nodeName });
+      domainList.push({ domain: address, port: port || 443, name: nodeName, portLocked: Boolean(port && port !== 443) });
     }
   }
   return { ipList, domainList, proxyList };
@@ -1389,8 +1438,10 @@ function parseWarpEndpointList(raw, count, family = 'auto', seed = '') {
   }
   const wanted = Math.max(1, Math.min(parseInt(count, 10) || WARP_ML_CONF_COUNT, 30));
   const fam = String(family || 'auto').toLowerCase();
-  const v4Hosts = WARP_ENDPOINT_IPS.filter(host => !String(host).includes(':'));
-  const v6Hosts = WARP_ENDPOINT_IPS.filter(host => String(host).includes(':'));
+  const extraV4 = WARP_EXTRA_ENDPOINTS.filter(item => !String(item.host).includes(':')).map(item => item.host);
+  const extraV6 = WARP_EXTRA_ENDPOINTS.filter(item => String(item.host).includes(':')).map(item => item.host);
+  const v4Hosts = [...new Set([...WARP_ENDPOINT_IPS.filter(host => !String(host).includes(':')), ...extraV4])];
+  const v6Hosts = [...new Set([...WARP_ENDPOINT_IPS.filter(host => String(host).includes(':')), ...extraV6])];
   // انتخاب پایدار بر اساس بذر کاربر/تنظیمات (نه ساعت): با پینگ و رفرش ساب
   // اندپوینت‌های چندلوکیشن جابه‌جا نمی‌شوند.
   const shift = Math.abs(awgHash(`${seed}:${fam}:${wanted}`)) % 97;
@@ -1633,8 +1684,10 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
   const base = registered || buildFallbackWarpConfig();
   const awgv = normalizeAwgVersion(cfg.awgv);
   const seed = String(options.seed || cfg.wk || BRAND_NAME);
-  const v4Hosts = WARP_ENDPOINT_IPS.filter(host => !String(host).includes(':'));
-  const v6Hosts = WARP_ENDPOINT_IPS.filter(host => String(host).includes(':'));
+  const extraV4 = WARP_EXTRA_ENDPOINTS.filter(item => !String(item.host).includes(':'));
+  const extraV6 = WARP_EXTRA_ENDPOINTS.filter(item => String(item.host).includes(':'));
+  const v4Hosts = [...new Set([...WARP_ENDPOINT_IPS.filter(host => !String(host).includes(':')), ...extraV4.map(item => item.host)])];
+  const v6Hosts = [...new Set([...WARP_ENDPOINT_IPS.filter(host => String(host).includes(':')), ...extraV6.map(item => item.host)])];
   const shift = awgHash(seed) % Math.max(1, v4Hosts.length);
   const v4Rotated = [...v4Hosts.slice(shift), ...v4Hosts.slice(0, shift)];
   const ports = WARP_ENDPOINT_PORTS;
@@ -1658,6 +1711,19 @@ export async function buildWarpConfBundle(cfg = {}, options = {}) {
   });
   // ۴) اندپوینت دامنه‌ای (dual-stack) برای شبکه‌هایی که IP خام را می‌بندند
   [2408, 1701].forEach((port, idx) => add(WARP_DEFAULT_HOST, port, idx === 0 ? 'balanced' : 'aggressive', 'dns'));
+  // ۵) نقاط پایانی اضافهٔ اپراتور (همهٔ آی‌پی‌ها و پورت‌های داده‌شده)
+  const seenExtra = new Set(entries.map(entry => `${entry.host}:${entry.port}`));
+  for (const item of WARP_EXTRA_ENDPOINTS) {
+    const key = `${item.host}:${item.port}`;
+    if (seenExtra.has(key)) continue;
+    seenExtra.add(key);
+    add(
+      item.host,
+      item.port,
+      String(item.host).includes(':') ? 'mobile' : 'balanced',
+      String(item.host).includes(':') ? 'v6' : 'extra'
+    );
+  }
 
   const files = [];
   const used = new Set();
@@ -2291,7 +2357,8 @@ function buildNodesCacheKey(workerHost, userOrConfig, cfg, overrides = {}, epoch
     overrides.set || '', overrides.country || '', overrides.region || '',
     overrides.proto || '', overrides.limit === undefined ? '' : String(overrides.limit),
     overrides.wk || '', overrides.scope || userOrConfig?.nodeScope || 'all',
-    overrides.nowarp || ''
+    overrides.nowarp || '',
+    userOrConfig?.subNodeCount === undefined ? '' : String(userOrConfig.subNodeCount)
   ].join('|');
   return `${workerHost}|${uuid}|${stableAddressSeed(JSON.stringify(cfg))}|${params}|e${epoch}`;
 }
@@ -2393,7 +2460,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
       const isV6 = host.includes(':');
       cfg.ipv4 = isV6 ? 'no' : 'yes';
       cfg.ipv6 = isV6 ? 'yes' : 'no';
-      pinnedNode = { ip: host, port: (chosen && chosen.port) || 443, isp: 'Fixed-IP' };
+      pinnedNode = { ip: host, port: (chosen && chosen.port) || 443, isp: 'Fixed-IP', portLocked: Boolean(chosen && chosen.port && Number(chosen.port) !== 443) };
       const name = String((chosen && (chosen.name || chosen.isp)) || '').trim();
       const match = name.match(/\b([A-Za-z]{2})\b/);
       fixedIpCountry = match ? match[1].toUpperCase() : '';
@@ -2427,7 +2494,9 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   let frontCursor = 0;
 
   function appendFromSource(sourceList) {
-    const safeList = filterAddressFamily(sourceList, cfg);
+    // فیدهای عمومی SOCKS/HTTP می‌توانند هزاران خط برگردانند؛ سقف امنیتي
+    // از پرش حافظه/Stack Overflow در ساخت لینک‌ها جلوگیری می‌کند.
+    const safeList = filterAddressFamily(sourceList, cfg).slice(0, 160);
     if (!Array.isArray(safeList) || safeList.length === 0) return;
     const decorated = frontHosts.length > 1
       ? safeList.map(item => ({ ...item, frontHost: frontHosts[(frontCursor++) % frontHosts.length] }))
@@ -2582,19 +2651,6 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
           appendFromSource(stable);
         }
       }
-      if (cfg.egi === 'yes' && cfg.yxURL) {
-        const urlList = await fetchPreferredFromUrls(cfg.yxURL);
-        // خطوط دارای scheme (socks5/http) پروکسی خروجی هستند، نه آدرس نود:
-        // آنها را به نودهای «آی‌پی ثابت CF + زنجیره پروکسی در مسیر» تبدیل می‌کنیم تا پینگ بدهند.
-        const ipOnly = urlList.filter(x => !x.proxy);
-        const proxyOnly = urlList.filter(x => x.proxy).map(x => ({ proxy: x.proxy, country: '' }));
-        if (ipOnly.length > 0) {
-          appendFromSource(ipOnly);
-        }
-        if (proxyOnly.length > 0) {
-          appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, addrSeed + ':url'));
-        }
-      }
       // ترکیب خانواده‌ها در ساب‌لینک اصلی: بخشی از نودها IPv6 و بخشی دامنه‌محور
       // می‌شوند تا هر سه استخر (IPv4 / IPv6 / دامنه) طبق تعداد نود همان کاربر
       // در ساب‌لینک حاضر باشند؛ نه فقط در ساب‌های ?set=ipv6 و ?set=domain.
@@ -2651,6 +2707,34 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
           if (extraV6.length) appendFromSource(extraV6);
         }
       }
+    }
+  }
+
+  // فیدهای SOCKS/HTTP برای هر دو حالت (آدرس دستی یا استخر پیش‌فرض) خوانده
+  // می‌شوند؛ قبلاً فقط وقتی yx خالی بود اجرا می‌شد و پروکسی‌های کاربر نادیده می‌ماند.
+  if (cfg.egi === 'yes' && cfg.yxURL) {
+    const urlList = await fetchPreferredFromUrls(cfg.yxURL);
+    const ipOnly = urlList.filter(x => !x.proxy).slice(0, 16);
+    const proxyOnly = urlList.filter(x => x.proxy).slice(0, 16).map(x => ({ proxy: x.proxy, country: '' }));
+    // در حالت آدرس دستی، خطوط host:port فیدها می‌توانند آی‌پی مشترک بین
+    // کاربران بیاورند؛ فقط پروکسی‌های scheme‌دار را به زنجیره اضافه می‌کنیم.
+    if (ipOnly.length > 0 && !hasCustomPreferred) appendFromSource(ipOnly);
+    if (proxyOnly.length > 0) appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, addrSeed + ':url'));
+  }
+
+  // در حالت آدرس دستی، اگر مجموع نودها به سقف نرسید از استخر زندهٔ لبه پر می‌شود.
+  if (hasCustomPreferred) {
+    const customRequested = parseInt(
+      queryOverrides.limit ?? userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 0,
+      10
+    ) || 0;
+    const customBuilt = protoGroups.vless.length + protoGroups.trojan.length + protoGroups.ss.length + protoGroups.xhttp.length;
+    if (customRequested > 0 && customBuilt < customRequested) {
+      const activeProtoCount = [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length || 1;
+      const perProto = Math.ceil((customRequested - customBuilt) / activeProtoCount) + 3;
+      const extraIps = pickStableAddresses(edgePool.ipv4, perProto * 2, addrSeed + '-custom-topup')
+        .map(ip => ({ ip, port: 443, isp: 'CF-Live' }));
+      if (extraIps.length) appendFromSource(extraIps);
     }
   }
 
