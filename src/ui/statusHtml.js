@@ -1390,6 +1390,9 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
             a.download = fileName;
             a.style.display = 'none';
             a.rel = 'noopener';
+            // بدون این نشانه، هندلر سراسری همین لینک را دوباره می‌گیرد و
+            // دانلود وارد حلقهٔ بی‌نهایت و کرش می‌شود.
+            a.setAttribute('data-direct-download', '1');
             document.body.appendChild(a);
             a.click();
             // حذف فوری لینک در iOS/Safari باعث لغو دانلود می‌شود.
@@ -1554,6 +1557,7 @@ export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
     document.addEventListener('click', function(event) {
       var downloadLink = event.target.closest ? event.target.closest('a[download][href]') : null;
       if (downloadLink) {
+        if (downloadLink.hasAttribute('data-direct-download')) return;
         if (downloadLink.origin !== window.location.origin) return;
         event.preventDefault();
         downloadFileUrl(downloadLink.href, downloadLink.getAttribute('download') || '');

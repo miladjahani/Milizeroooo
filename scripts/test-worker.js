@@ -714,6 +714,11 @@ async function runTests() {
       authedAdminHtml.includes('a[download][href]'),
       'همهٔ دانلودها باید از مسیر fetch/blob با بررسی خطا و لینک‌های download پشتیبانی کنند'
     );
+    assert.ok(
+      authedAdminHtml.includes("link.setAttribute('data-direct-download', '1')") &&
+      authedAdminHtml.includes("link.hasAttribute('data-direct-download')"),
+      'لینک blob دانلود نباید دوباره توسط هندلر کلیک سراسری گرفته شود (جلوگیری از حلقهٔ کرش)'
+    );
     const usersPanelStart = authedAdminHtml.indexOf('<section class="panel" data-panel="users">');
     const usersPanelEnd = authedAdminHtml.indexOf('<section class="panel" data-panel="scanner">');
     const usersPanelHtml = usersPanelStart >= 0 && usersPanelEnd > usersPanelStart
@@ -741,6 +746,11 @@ async function runTests() {
     assert.ok(
       statusHtml.includes('downloadUserBackup()') && statusHtml.includes('بکاپ اطلاعات من'),
       'هدر صفحه وضعیت کاربر باید دارای دکمه بکاپ اطلاعات من باشد'
+    );
+    assert.ok(
+      statusHtml.includes("a.setAttribute('data-direct-download', '1')") &&
+      statusHtml.includes("downloadLink.hasAttribute('data-direct-download')"),
+      'دانلود بکاپ صفحهٔ وضعیت هم نباید وارد حلقهٔ کلیک سراسری شود'
     );
 
     const userBackupResp = await worker.fetch(

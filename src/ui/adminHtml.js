@@ -4396,7 +4396,7 @@ ${PWA_HEAD_TAGS}
             <div class="update-state" id="updState">در حال بررسی...</div>
           </div>
         </div>
-        <p class="update-note">کلید کلادفلر به‌صورت محرمانه در سکرت‌های همین ورکر قرار گرفته است؛ برای بروزرسانی لازم نیست هیچ توکنی وارد کنید. اگر نسخهٔ تازه‌ای موجود باشد، با یک کلیک روی همین ورکر مستقر می‌شود.</p>
+        <p class="update-note" id="updNote">برای بروزرسانی، ابتدا نسخهٔ تازه بررسی می‌شود؛ اگر نصب خودکار فعال باشد همان‌جا مستقر می‌شود، وگرنه فایل آمادهٔ استقرار دانلود می‌شود.</p>
         <div class="update-meta">
           <div class="kv"><span>نصب خودکار</span><b id="updAuto">—</b></div>
           <div class="kv"><span>اسکریپت هدف</span><b class="mono" id="updScript">—</b></div>
@@ -6167,6 +6167,11 @@ ${PWA_HEAD_TAGS}
       $('updAuto').style.color = autoReady ? 'var(--neon)' : 'var(--warn)';
     }
     if ($('updScript')) $('updScript').textContent = (info && info.scriptName) || 'تشخیص خودکار';
+    if ($('updNote') && info && info.success !== false && !info.error) {
+      $('updNote').textContent = autoReady
+        ? 'کلید محرمانهٔ کلادفلر روی همین ورکر تنظیم شده است؛ با کلیک روی «بروزرسانی و استقرار»، نسخهٔ تازه مستقیم روی ورکر مستقر می‌شود.'
+        : 'نصب خودکار فعال نیست چون CF_API_TOKEN روی ورکر تعریف نشده؛ دکمهٔ بروزرسانی فایل نسخهٔ تازه را دانلود می‌کند تا در داشبورد کلادفلر مستقر کنید. برای نصب یک‌کلیکی، کلید را در متغیرهای ورکر قرار دهید.';
+    }
 
     if (!info || info.success === false || info.error) {
       setUpdateState('بررسی ناموفق — دوباره تلاش کنید', 'error');
@@ -6213,8 +6218,17 @@ ${PWA_HEAD_TAGS}
     }
   }
 
+  function apiWithTimeout(path, options, timeoutMs) {
+    var opts = options || {};
+    if (typeof AbortController === 'undefined') return api(path, opts);
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+    opts.signal = controller.signal;
+    return api(path, opts).finally(function() { clearTimeout(timer); });
+  }
+
   function checkUpdate(silent, openWhenAvailable) {
-    api('/api/update?t=' + Date.now())
+    apiWithTimeout('/api/update?t=' + Date.now(), {}, 30000)
       .then(function(info) {
         renderUpdateInfo(info, silent);
         if (openWhenAvailable && info && info.updateAvailable) {
@@ -6222,9 +6236,10 @@ ${PWA_HEAD_TAGS}
           openModal('updateModal');
         }
       })
-      .catch(function() {
-        setUpdateState('بررسی ناموفق — خطای شبکه', 'error');
-        if (!silent) showToast('خطای شبکه در بررسی بروزرسانی', 'err');
+      .catch(function(err) {
+        var timedOut = err && err.name === 'AbortError';
+        setUpdateState(timedOut ? 'بررسی طولانی شد — دوباره تلاش کنید' : 'بررسی ناموفق — خطای شبکه', 'error');
+        if (!silent) showToast(timedOut ? 'بررسی بروزرسانی بیش از ۳۰ ثانیه طول کشید؛ دوباره تلاش کنید' : 'خطای شبکه در بررسی بروزرسانی', 'err');
       });
   }
 
@@ -6308,9 +6323,11 @@ ${PWA_HEAD_TAGS}
 
   function diagnoseUpdate() {
     showToast('در حال بررسی پیش‌نیازهای نصب خودکار...', 'ok');
-    api('/api/update?diagnose=1&t=' + Date.now())
+    apiWithTimeout('/api/update?diagnose=1&t=' + Date.now(), {}, 60000)
       .then(renderUpdateDiagnose)
-      .catch(function() { showToast('خطای شبکه در تشخیص نصب خودکار', 'err'); });
+      .catch(function(err) {
+        showToast(err && err.name === 'AbortError' ? 'تشخیص نصب خودکار طول کشید؛ دوباره تلاش کنید' : 'خطای شبکه در تشخیص نصب خودکار', 'err');
+      });
   }
 
   function copyUpdateCommand() {
@@ -6355,7 +6372,7 @@ ${PWA_HEAD_TAGS}
     var btn = document.querySelector('[data-act="apply-update"]');
     if (btn) btn.disabled = true;
     showToast('در حال دریافت و استقرار نسخهٔ تازه...', 'ok');
-    api('/api/update', { method: 'POST', body: JSON.stringify({ action: 'apply' }) })
+    apiWithTimeout('/api/update', { method: 'POST', body: JSON.stringify({ action: 'apply' }) }, 120000)
       .then(function(data) {
         if (data.success) {
           showToast(data.message || 'نسخهٔ تازه مستقر شد', 'ok');
@@ -6371,7 +6388,11 @@ ${PWA_HEAD_TAGS}
           if (data.diagnose) setTimeout(diagnoseUpdate, 600);
         }
       })
-      .catch(function() { showToast('خطای شبکه در بروزرسانی', 'err'); })
+      .catch(function(err) {
+        showToast(err && err.name === 'AbortError'
+          ? 'بروزرسانی بیش از ۲ دقیقه طول کشید؛ فایل را دوباره دانلود کنید'
+          : 'خطای شبکه در بروزرسانی', 'err');
+      })
       .finally(function() { if (btn) btn.disabled = false; });
   }
 
@@ -6406,7 +6427,7 @@ ${PWA_HEAD_TAGS}
   }
 
   function reloadUsers() {
-    api('/api/users?t=' + Date.now())
+    apiWithTimeout('/api/users?t=' + Date.now(), {}, 20000)
       .then(function(data) {
         if (data.success) {
           state.users = data.users || [];
@@ -6414,7 +6435,9 @@ ${PWA_HEAD_TAGS}
           showToast('لیست کاربران بروزرسانی شد', 'ok');
         }
       })
-      .catch(function() { showToast('خطا در دریافت کاربران', 'err'); });
+      .catch(function(err) {
+        showToast(err && err.name === 'AbortError' ? 'بروزرسانی لیست بیش از ۲۰ ثانیه طول کشید' : 'خطا در دریافت کاربران', 'err');
+      });
   }
 
   // منوی اسکن: هر مورد یک صفحهٔ مستقل دارد و همه چیز داخل پنل اجرا می‌شود
@@ -6937,6 +6960,9 @@ ${PWA_HEAD_TAGS}
           link.download = fileName;
           link.style.display = 'none';
           link.rel = 'noopener';
+          // این لینک مصنوعی است و نباید هندلر سراسری دانلود دوباره آن را بگیرد؛
+          // وگرنه click → downloadFile → click یک حلقهٔ بی‌نهایت و کرش می‌سازد.
+          link.setAttribute('data-direct-download', '1');
           document.body.appendChild(link);
           link.click();
           // حذف فوری لینک در iOS/Safari دانلود را لغو می‌کند؛ کمی صبر می‌کنیم.
@@ -7247,6 +7273,8 @@ ${PWA_HEAD_TAGS}
   document.addEventListener('click', function(event) {
     var link = event.target && event.target.closest ? event.target.closest('a[download][href]') : null;
     if (!link) return;
+    // لینک‌های blob که خود downloadFile ساخته‌اند باید مستقیم دانلود شوند.
+    if (link.hasAttribute('data-direct-download')) return;
     if (link.origin !== window.location.origin) return;
     event.preventDefault();
     downloadFile(link.href, link.getAttribute('download') || '', 'دانلود شروع شد');

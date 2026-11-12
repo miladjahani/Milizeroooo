@@ -43,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.13.0';
+export const VERSION = 'v3.13.1';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // ساب‌لینک اصلی مدیر همیشه ۴۰۰ نود (همهٔ پروتکل‌ها و ترکیب‌های آدرس) دارد
