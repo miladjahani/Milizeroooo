@@ -4526,6 +4526,9 @@ ${PWA_HEAD_TAGS}
   var INITIAL_DATA = ${safeInitialJson};
   var ICO = ${clientIcons};
   var MAX_USERS = INITIAL_DATA.maxUsersLimit || 5;
+  // این مقدار در کد سمت مرورگر استفاده می‌شود؛ بدون تعریف آن، باز کردن فرم
+  // ایجاد/ویرایش کاربر خطای ReferenceError می‌داد.
+  var MAX_SUB_NODE_COUNT = ${MAX_SUB_NODE_COUNT};
   var ADMIN_PATH = String(INITIAL_DATA.adminPath || '').replace(/^\\/+|\\/+$/g, '');
   var API_BASE = ADMIN_PATH ? '/' + ADMIN_PATH : '';
   var state = {

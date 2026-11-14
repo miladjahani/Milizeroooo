@@ -43,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.14.1';
+export const VERSION = 'v3.14.2';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // سقف سخت تعداد نودهای هر ساب‌لینک؛ حالت خودکار هم بیشتر از این نود نمی‌سازد.

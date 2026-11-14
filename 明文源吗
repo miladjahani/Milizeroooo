@@ -1410,7 +1410,7 @@ function poolSubscriptionText(options = {}) {
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.14.1';
+const VERSION = 'v3.14.2';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // سقف سخت تعداد نودهای هر ساب‌لینک؛ حالت خودکار هم بیشتر از این نود نمی‌سازد.
@@ -22999,6 +22999,9 @@ ${PWA_HEAD_TAGS}
   var INITIAL_DATA = ${safeInitialJson};
   var ICO = ${clientIcons};
   var MAX_USERS = INITIAL_DATA.maxUsersLimit || 5;
+  // این مقدار در کد سمت مرورگر استفاده می‌شود؛ بدون تعریف آن، باز کردن فرم
+  // ایجاد/ویرایش کاربر خطای ReferenceError می‌داد.
+  var MAX_SUB_NODE_COUNT = ${MAX_SUB_NODE_COUNT};
   var ADMIN_PATH = String(INITIAL_DATA.adminPath || '').replace(/^\\/+|\\/+$/g, '');
   var API_BASE = ADMIN_PATH ? '/' + ADMIN_PATH : '';
   var state = {

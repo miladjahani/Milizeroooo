@@ -364,6 +364,10 @@ async function runTests() {
     assert.strictEqual(freshAdminResp.status, 200, 'صفحهٔ مدیریت در ایزولهٔ تازه باید باز شود');
     const freshAdminHtml = await freshAdminResp.text();
     assert.ok(freshAdminHtml.includes('data-skin='), 'نشست مدیریتی باید بعد از ایزولهٔ تازه معتبر بماند');
+    assert.ok(
+      freshAdminHtml.includes(`var MAX_SUB_NODE_COUNT = ${MAX_SUB_NODE_COUNT};`),
+      'سقف نود باید در اسکریپت سمت مرورگر تعریف شده باشد؛ وگرنه فرم ایجاد/ویرایش کاربر ReferenceError می‌دهد'
+    );
     const rootRedirect = await freshWorker.fetch(
       new Request('https://mili.example.com/', { headers: { Cookie: sessionCookie } }),
       d1Env,
