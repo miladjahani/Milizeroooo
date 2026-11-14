@@ -43,12 +43,13 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.14.0';
+export const VERSION = 'v3.14.1';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
-// ساب‌لینک اصلی مدیر همیشه ۴۰۰ نود (همهٔ پروتکل‌ها و ترکیب‌های آدرس) دارد
-// تا برای تست و کار روزمرهٔ خود مدیر کافی باشد؛ ساب‌های کاربران از تنظیم خودشان پیروی می‌کنند.
-export const ADMIN_SUB_NODE_COUNT = 400;
+// سقف سخت تعداد نودهای هر ساب‌لینک؛ حالت خودکار هم بیشتر از این نود نمی‌سازد.
+export const MAX_SUB_NODE_COUNT = 350;
+// ساب‌لینک اصلی مدیر هم از همان سقف پیروی می‌کند؛ ساب‌های کاربران از تنظیم خودشان.
+export const ADMIN_SUB_NODE_COUNT = MAX_SUB_NODE_COUNT;
 export const MAX_USERS_LIMIT = 5;
 export const TELEGRAM_SUPPORT = '@miliconfig';
 
@@ -109,8 +110,8 @@ export const CONFIG_DEFAULTS = {
   ispUnicom: 'yes',
   ispTelecom: 'yes',
   jk: 'no',
-  // صفر = بدون سقف؛ تعداد کانفیگ را کاربر/پنل انتخاب نمی‌کند و موتور خودش
-  // همهٔ آدرس‌های منابع را مثل cfnew به نود تبدیل می‌کند.
+  // صفر = خودکار؛ تعداد کانفیگ را کاربر/پنل انتخاب نمی‌کند و موتور خودش
+  // همهٔ آدرس‌های منابع را مثل cfnew به نود تبدیل می‌کند (حداکثر ۳۵۰ نود).
   subNodeCount: 0,
   region: 'auto', // منطقهٔ لوکیشن نودها: auto | CF | کد کشور (مثل DE/NL/US)
   brand: BRAND_NAME,
@@ -504,15 +505,17 @@ export const MULTI_PLACEMENT_COLOS = PLACEMENT_REGIONS.map(item => item.colo);
 export const PROXYIP_REGIONS = [
   { code: 'DE', country: 'DE', flag: '🇩🇪', name: 'آلمان', host: 'ProxyIP.DE.CMLiussss.net' },
   { code: 'NL', country: 'NL', flag: '🇳🇱', name: 'هلند', host: 'ProxyIP.NL.CMLiussss.net' },
-  { code: 'UK', country: 'GB', flag: '🇬🇧', name: 'بریتانیا', host: 'ProxyIP.UK.CMLiussss.net' },
+  { code: 'UK', country: 'GB', flag: '🇬🇧', name: 'بریتانیا', host: 'ProxyIP.GB.CMLiussss.net' },
   { code: 'FR', country: 'FR', flag: '🇫🇷', name: 'فرانسه', host: 'ProxyIP.FR.CMLiussss.net' },
   { code: 'FI', country: 'FI', flag: '🇫🇮', name: 'فنلاند', host: 'ProxyIP.FI.CMLiussss.net' },
   { code: 'PL', country: 'PL', flag: '🇵🇱', name: 'لهستان', host: 'ProxyIP.PL.CMLiussss.net' },
-  { code: 'TR', country: 'TR', flag: '🇹🇷', name: 'ترکیه', host: 'ProxyIP.TR.CMLiussss.net' },
-  { code: 'IAD', country: 'US', flag: '🇺🇸', name: 'ایالات متحده شرق', host: 'ProxyIP.IAD.CMLiussss.net' },
-  { code: 'LAX', country: 'US', flag: '🇺🇸', name: 'ایالات متحده غرب', host: 'ProxyIP.LAX.CMLiussss.net' },
+  { code: 'TR', country: 'TR', flag: '🇹🇷', name: 'ترکیه', host: 'ProxyIP.DE.CMLiussss.net' },
+  { code: 'IAD', country: 'US', flag: '🇺🇸', name: 'ایالات متحده شرق', host: 'ProxyIP.US.CMLiussss.net' },
+  { code: 'LAX', country: 'US', flag: '🇺🇸', name: 'ایالات متحده غرب', host: 'ProxyIP.US.CMLiussss.net' },
+  { code: 'SE', country: 'SE', flag: '🇸🇪', name: 'سوئد', host: 'ProxyIP.SE.CMLiussss.net' },
+  { code: 'CH', country: 'CH', flag: '🇨🇭', name: 'سوئیس', host: 'ProxyIP.CH.CMLiussss.net' },
   { code: 'CA', country: 'CA', flag: '🇨🇦', name: 'کانادا', host: 'ProxyIP.CA.CMLiussss.net' },
-  { code: 'AE', country: 'AE', flag: '🇦🇪', name: 'امارات', host: 'ProxyIP.AE.CMLiussss.net' },
+  { code: 'AE', country: 'AE', flag: '🇦🇪', name: 'امارات', host: 'ProxyIP.DE.CMLiussss.net' },
   { code: 'SG', country: 'SG', flag: '🇸🇬', name: 'سنگاپور', host: 'ProxyIP.SG.CMLiussss.net' },
   { code: 'JP', country: 'JP', flag: '🇯🇵', name: 'ژاپن', host: 'ProxyIP.JP.CMLiussss.net' },
   { code: 'KR', country: 'KR', flag: '🇰🇷', name: 'کره جنوبی', host: 'ProxyIP.KR.CMLiussss.net' },
@@ -524,6 +527,26 @@ export const PROXYIP_REGIONS = [
 ];
 
 export const DEFAULT_PROXYIP_REGION = 'DE';
+const PROXYIP_BY_COUNTRY = new Map();
+for (const item of PROXYIP_REGIONS) {
+  if (item.country && !PROXYIP_BY_COUNTRY.has(item.country)) {
+    PROXYIP_BY_COUNTRY.set(item.country, item);
+  }
+}
+
+// Coloها کد فرودگاه هستند (FRA/AMS/...) ولی ProxyIPهای CMLiussss با کد
+// کشور/منطقه سرو می‌شوند (DE/NL/...). این نگاشت جلوی ساخت دامنه‌های
+// ناموجودی مثل ProxyIP.FRA.CMLiussss.net را می‌گیرد.
+export function proxyIpCodeForPlacement(colo = '') {
+  const placement = getPlacementRegion(colo);
+  if (!placement) return DEFAULT_PROXYIP_REGION;
+  if (placement.country === 'US') {
+    return placement.colo === 'SJC' ? 'LAX' : 'IAD';
+  }
+  const region = PROXYIP_BY_COUNTRY.get(placement.country);
+  return region ? region.code : DEFAULT_PROXYIP_REGION;
+}
+
 export const PROXYIP_FALLBACKS = [
   'ProxyIP.Oracle.CMLiussss.net:443',
   'bpb.yousef.isegaro.com:443'
@@ -607,7 +630,14 @@ export function resolveProxyIpValue(value = '', colo = '') {
   const first = raw.split(',')[0].trim();
   if (!first || /^auto$/i.test(first)) {
     const cleanColo = String(colo || '').trim().toUpperCase();
-    return `ProxyIP.${/^[A-Z]{3}$/.test(cleanColo) ? cleanColo : 'FRA'}.CMLiussss.net:443`;
+    return proxyIpHostForCode(proxyIpCodeForPlacement(cleanColo));
+  }
+  // لینک‌های قدیمی که با Colo ساخته شده‌اند (ProxyIP.FRA/AMS/...) را هم
+  // به دامنهٔ واقعی ProxyIP همان کشور نگاشت می‌کنیم.
+  const legacyColo = first.match(/^ProxyIP\.([A-Za-z]{3})\.CMLiussss\.net(?::(\d+))?$/i);
+  if (legacyColo && !getProxyIpRegion(legacyColo[1]) && getPlacementRegion(legacyColo[1])) {
+    const port = legacyColo[2] || '443';
+    return `ProxyIP.${proxyIpCodeForPlacement(legacyColo[1])}.CMLiussss.net:${port}`;
   }
   return first;
 }
@@ -756,8 +786,10 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   // حذف HTTP فقط با سوییچ صریح dkby انجام می‌شود.
   snap.alpn = normalizeAlpn(snap.alpn);
   const parsedCount = parseInt(snap.subNodeCount, 10);
-  // ۰ = بدون سقف (موتور خودش تعداد نودها را تعیین می‌کند)
-  snap.subNodeCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
+  // ۰ = خودکار (موتور خودش تعداد نودها را تا سقف ۳۵۰ تعیین می‌کند)
+  snap.subNodeCount = Number.isFinite(parsedCount) && parsedCount >= 0
+    ? Math.min(parsedCount, MAX_SUB_NODE_COUNT)
+    : 0;
   const rawRegion = String(rawConfig?.region || '').trim().toUpperCase();
   const hadExplicitPlacement = rawConfig?.placement !== undefined && String(rawConfig.placement || '').trim() !== '';
   const legacyPlacement = !hadExplicitPlacement && /^[A-Z]{2}$/.test(rawRegion) && rawRegion !== 'AUTO' && rawRegion !== 'CF'

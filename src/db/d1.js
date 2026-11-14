@@ -7,6 +7,7 @@ import {
   BRAND_NAME,
   CONFIG_DEFAULTS,
   DEFAULT_ADMIN_UUID,
+  MAX_SUB_NODE_COUNT,
   MAX_USERS_LIMIT,
   VERSION,
   getEnvConfigSnapshot,
@@ -43,7 +44,7 @@ function normalizeNodeLimit(value) {
   const parsed = parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
   if (parsed === 50 || parsed === 100) return 0;
-  return parsed;
+  return Math.min(parsed, MAX_SUB_NODE_COUNT);
 }
 
 export function detectD1Binding(env) {

@@ -13,6 +13,7 @@ import {
   ECH_DOMAINS,
   FINGERPRINT_PRESETS,
   FRAGMENT_PRESETS,
+  MAX_SUB_NODE_COUNT,
   MAX_USERS_LIMIT,
   PATH_PATTERNS,
   PLACEMENT_REGIONS,
@@ -4187,7 +4188,7 @@ ${PWA_HEAD_TAGS}
             <div class="help-card">
               <h4>${icon('gauge')} تعداد نود هر کاربر</h4>
               <ul>
-                <li>تعداد نود به‌صورت خودکار از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت ساخته می‌شود؛ مقدار ۰ یعنی بدون سقف.</li>
+                <li>تعداد نود به‌صورت خودکار از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت ساخته می‌شود؛ مقدار ۰ یعنی خودکار و حداکثر ${MAX_SUB_NODE_COUNT} نود.</li>
                 <li>آدرس‌ها از همهٔ مخزن‌ها (IPv4، IPv6، دامنه، ProxyIP و SOCKS/HTTP) انتخاب می‌شوند.</li>
                 <li>هر کاربر آدرس‌های اختصاصی می‌گیرد؛ آدرس کاربران قبلی دوباره استفاده نمی‌شود.</li>
               </ul>
@@ -5940,9 +5941,9 @@ ${PWA_HEAD_TAGS}
       '<div class="field"><label>حجم مجاز (گیگابایت) — ۰ = نامحدود</label><input type="number" id="uf_dataLimitGb" min="0" step="1" list="dlDataLimit" value="' + Number((user && user.dataLimitGb) || 0) + '"></div>' +
       '<div class="field"><label>مدت اعتبار (روز) — ۰ = بدون انقضا</label><input type="number" id="uf_expireDays" min="0" step="1" list="dlExpireDays" value="' + Number((user && user.expireDays) || 0) + '"></div>' +
       '<div class="field"><label>سقف دستگاه متصل</label><input type="number" id="uf_ipLimit" min="1" max="200" step="1" value="' + Number((user && user.ipLimit) || 50) + '"></div>' +
-      '<div class="field"><label>تعداد نود در ساب‌لینک (۰ = خودکار)</label><input type="number" id="uf_subNodeCount" min="0" step="1" value="' + Math.max(0, Number((user && user.subNodeCount) || 0)) + '"></div>' +
+      '<div class="field"><label>تعداد نود در ساب‌لینک (۰ = خودکار — حداکثر ' + MAX_SUB_NODE_COUNT + ')</label><input type="number" id="uf_subNodeCount" min="0" max="' + MAX_SUB_NODE_COUNT + '" step="1" value="' + Math.min(MAX_SUB_NODE_COUNT, Math.max(0, Number((user && user.subNodeCount) || 0))) + '"></div>' +
       '</div>' +
-      '<div class="field" style="margin-top:10px;"><span class="field-hint">مقدار ۰ یعنی بدون سقف؛ تعداد نهایی از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت (TLS/HTTP) محاسبه می‌شود. برای قفل‌کردن نودها روی یک آی‌پی، از تب «آدرس‌ها و منطقه» حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
+      '<div class="field" style="margin-top:10px;"><span class="field-hint">مقدار ۰ یعنی خودکار؛ تعداد نهایی از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت (TLS/HTTP) محاسبه می‌شود و از ' + MAX_SUB_NODE_COUNT + ' نود بیشتر نمی‌شود. برای قفل‌کردن نودها روی یک آی‌پی، از تب «آدرس‌ها و منطقه» حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
 
     var tabButton = function(id, label, iconName) {
       var on = activeTab === id;
@@ -5998,7 +5999,7 @@ ${PWA_HEAD_TAGS}
       dataLimitGb: Number(val('uf_dataLimitGb', '0')) || 0,
       expireDays: Number(val('uf_expireDays', '0')) || 0,
       ipLimit: Number(val('uf_ipLimit', '50')) || 50,
-      subNodeCount: Math.max(0, parseInt(val('uf_subNodeCount', '0'), 10) || 0),
+      subNodeCount: Math.min(MAX_SUB_NODE_COUNT, Math.max(0, parseInt(val('uf_subNodeCount', '0'), 10) || 0)),
       config: config
     };
   }

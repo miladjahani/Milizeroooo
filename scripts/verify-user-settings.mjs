@@ -41,7 +41,7 @@ globalThis.fetch = async (url) => {
 
 const { generateUserNodesList, parseOpenVpnList, buildOvpnVariant, resolveOvpnTuningPresets } = await import('../src/subscription/generator.js');
 const { generateClashConfig, generateSingboxConfig } = await import('../src/subscription/converters.js');
-const { CONFIG_DEFAULTS } = await import('../src/config/defaults.js');
+const { CONFIG_DEFAULTS, MAX_SUB_NODE_COUNT, resolveProxyIpValue } = await import('../src/config/defaults.js');
 
 const WORKER = 'panel.example.com';
 const UUID = '351c9981-04b6-4103-aa4b-864aa9c01469';
@@ -70,6 +70,15 @@ function check(name, pass, detail = '') {
   results.push({ name, pass, detail });
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`);
 }
+
+// ۰) نگاشت Coloهای Placement به ProxyIPهای واقعی (FRA→DE، AMS→NL)
+check(
+  'نگاشت ProxyIP از Colo به کشور واقعی',
+  resolveProxyIpValue('auto', 'FRA') === 'ProxyIP.DE.CMLiussss.net:443' &&
+    resolveProxyIpValue('auto', 'AMS') === 'ProxyIP.NL.CMLiussss.net:443' &&
+    resolveProxyIpValue('ProxyIP.FRA.CMLiussss.net:443', '') === 'ProxyIP.DE.CMLiussss.net:443',
+  resolveProxyIpValue('auto', 'FRA')
+);
 
 // ۱) پروتکل‌ها
 {
@@ -147,9 +156,9 @@ function check(name, pass, detail = '') {
   const placement = await build({ sb: 'yes', placement: 'manual_placement:FRA', proxyMode: 'sync_placement', p: '' });
   const placementTls = tlsOnly(placement);
   check(
-    'Placement دستی — ProxyIP.FRA و Remark',
+    'Placement دستی — ProxyIP کشور DE و Remark',
     placementTls.length > 0 &&
-      placementTls.every(l => (parseLink(l).searchParams.get('path') || '').includes('proxyip=ProxyIP.FRA.CMLiussss.net:443')) &&
+      placementTls.every(l => (parseLink(l).searchParams.get('path') || '').includes('proxyip=ProxyIP.DE.CMLiussss.net:443')) &&
       placementTls.every(l => decodeURIComponent(String(l).split('#')[1] || '').includes('[Placement: FRA]')) &&
       placementTls.every(l => decodeURIComponent(String(l).split('#')[1] || '').includes('🇩🇪 DE')),
     decodeURIComponent(String(placementTls[0] || '').split('#')[1] || '')
@@ -162,7 +171,7 @@ function check(name, pass, detail = '') {
   const multiPaths = multi.map(l => parseLink(l).searchParams.get('path') || '').join('\n');
   check(
     'مولتی‌لوکیشن CMLiu — DE/NL/IAD/BPB در مسیرها',
-    ['ProxyIP.DE.CMLiussss.net:443', 'ProxyIP.NL.CMLiussss.net:443', 'ProxyIP.IAD.CMLiussss.net:443', 'bpb.yousef.isegaro.com:443'].every(host => multiPaths.includes(host))
+    ['ProxyIP.DE.CMLiussss.net:443', 'ProxyIP.NL.CMLiussss.net:443', 'ProxyIP.US.CMLiussss.net:443', 'bpb.yousef.isegaro.com:443'].every(host => multiPaths.includes(host))
   );
 
   const manualProxy = await build({
@@ -182,7 +191,7 @@ function check(name, pass, detail = '') {
   check(
     'xHTTP — proxyip و ed در مسیر',
     Boolean(xhttpLink) &&
-      (parseLink(xhttpLink).searchParams.get('path') || '').includes('proxyip=ProxyIP.AMS.CMLiussss.net:443') &&
+      (parseLink(xhttpLink).searchParams.get('path') || '').includes('proxyip=ProxyIP.NL.CMLiussss.net:443') &&
       (parseLink(xhttpLink).searchParams.get('path') || '').includes('ed=2048')
   );
 }
@@ -213,6 +222,20 @@ function check(name, pass, detail = '') {
     'حالت خودکار — تعداد نود متناسب با پورت‌های انتخابی',
     autoOne.length === 1 && autoSix.length === 6 && autoSix.length === autoOne.length * 6,
     `${autoOne.length} → ${autoSix.length}`
+  );
+
+  // حتی اگر درخواست ۵۰۰ نود بدهد، سقف سخت ۳۵۰ باید حفظ شود.
+  const manyAddresses = Array.from({ length: 20 }, (_, i) => `104.16.${i + 1}.20:443#n${i}`).join(',');
+  const many = await build({
+    ena: 'no', epi: 'yes', yxby: 'no', yx: manyAddresses,
+    ev: 'yes', et: 'yes', ex: 'yes', es: 'yes',
+    ports: '443,2053,2083', httpPorts: '80,8080,8880', subNodeCount: 500,
+    warp: 'no', warpPro: 'no', warpMl: 'no', warpMasque: 'no', ovpn: 'no'
+  });
+  check(
+    'سقف سخت ۳۵۰ نود برای ساب‌های بزرگ',
+    many.length > 0 && many.length <= MAX_SUB_NODE_COUNT,
+    `${many.length} نود`
   );
 
   // Placement فقط مسیر/نام را عوض می‌کند و منبع Address دست‌نخورده می‌ماند.

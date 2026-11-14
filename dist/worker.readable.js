@@ -1410,12 +1410,13 @@ function poolSubscriptionText(options = {}) {
 
 const BRAND_NAME = 'miliconfig';
 const BRAND_UPPER = 'MILICONFIG';
-const VERSION = 'v3.14.0';
+const VERSION = 'v3.14.1';
 const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
-// ساب‌لینک اصلی مدیر همیشه ۴۰۰ نود (همهٔ پروتکل‌ها و ترکیب‌های آدرس) دارد
-// تا برای تست و کار روزمرهٔ خود مدیر کافی باشد؛ ساب‌های کاربران از تنظیم خودشان پیروی می‌کنند.
-const ADMIN_SUB_NODE_COUNT = 400;
+// سقف سخت تعداد نودهای هر ساب‌لینک؛ حالت خودکار هم بیشتر از این نود نمی‌سازد.
+const MAX_SUB_NODE_COUNT = 350;
+// ساب‌لینک اصلی مدیر هم از همان سقف پیروی می‌کند؛ ساب‌های کاربران از تنظیم خودشان.
+const ADMIN_SUB_NODE_COUNT = MAX_SUB_NODE_COUNT;
 const MAX_USERS_LIMIT = 5;
 const TELEGRAM_SUPPORT = '@miliconfig';
 
@@ -1476,8 +1477,8 @@ const CONFIG_DEFAULTS = {
   ispUnicom: 'yes',
   ispTelecom: 'yes',
   jk: 'no',
-  // صفر = بدون سقف؛ تعداد کانفیگ را کاربر/پنل انتخاب نمی‌کند و موتور خودش
-  // همهٔ آدرس‌های منابع را مثل cfnew به نود تبدیل می‌کند.
+  // صفر = خودکار؛ تعداد کانفیگ را کاربر/پنل انتخاب نمی‌کند و موتور خودش
+  // همهٔ آدرس‌های منابع را مثل cfnew به نود تبدیل می‌کند (حداکثر ۳۵۰ نود).
   subNodeCount: 0,
   region: 'auto', // منطقهٔ لوکیشن نودها: auto | CF | کد کشور (مثل DE/NL/US)
   brand: BRAND_NAME,
@@ -1840,15 +1841,17 @@ const MULTI_PLACEMENT_COLOS = PLACEMENT_REGIONS.map(item => item.colo);
 const PROXYIP_REGIONS = [
   { code: 'DE', country: 'DE', flag: '🇩🇪', name: 'آلمان', host: 'ProxyIP.DE.CMLiussss.net' },
   { code: 'NL', country: 'NL', flag: '🇳🇱', name: 'هلند', host: 'ProxyIP.NL.CMLiussss.net' },
-  { code: 'UK', country: 'GB', flag: '🇬🇧', name: 'بریتانیا', host: 'ProxyIP.UK.CMLiussss.net' },
+  { code: 'UK', country: 'GB', flag: '🇬🇧', name: 'بریتانیا', host: 'ProxyIP.GB.CMLiussss.net' },
   { code: 'FR', country: 'FR', flag: '🇫🇷', name: 'فرانسه', host: 'ProxyIP.FR.CMLiussss.net' },
   { code: 'FI', country: 'FI', flag: '🇫🇮', name: 'فنلاند', host: 'ProxyIP.FI.CMLiussss.net' },
   { code: 'PL', country: 'PL', flag: '🇵🇱', name: 'لهستان', host: 'ProxyIP.PL.CMLiussss.net' },
-  { code: 'TR', country: 'TR', flag: '🇹🇷', name: 'ترکیه', host: 'ProxyIP.TR.CMLiussss.net' },
-  { code: 'IAD', country: 'US', flag: '🇺🇸', name: 'ایالات متحده شرق', host: 'ProxyIP.IAD.CMLiussss.net' },
-  { code: 'LAX', country: 'US', flag: '🇺🇸', name: 'ایالات متحده غرب', host: 'ProxyIP.LAX.CMLiussss.net' },
+  { code: 'TR', country: 'TR', flag: '🇹🇷', name: 'ترکیه', host: 'ProxyIP.DE.CMLiussss.net' },
+  { code: 'IAD', country: 'US', flag: '🇺🇸', name: 'ایالات متحده شرق', host: 'ProxyIP.US.CMLiussss.net' },
+  { code: 'LAX', country: 'US', flag: '🇺🇸', name: 'ایالات متحده غرب', host: 'ProxyIP.US.CMLiussss.net' },
+  { code: 'SE', country: 'SE', flag: '🇸🇪', name: 'سوئد', host: 'ProxyIP.SE.CMLiussss.net' },
+  { code: 'CH', country: 'CH', flag: '🇨🇭', name: 'سوئیس', host: 'ProxyIP.CH.CMLiussss.net' },
   { code: 'CA', country: 'CA', flag: '🇨🇦', name: 'کانادا', host: 'ProxyIP.CA.CMLiussss.net' },
-  { code: 'AE', country: 'AE', flag: '🇦🇪', name: 'امارات', host: 'ProxyIP.AE.CMLiussss.net' },
+  { code: 'AE', country: 'AE', flag: '🇦🇪', name: 'امارات', host: 'ProxyIP.DE.CMLiussss.net' },
   { code: 'SG', country: 'SG', flag: '🇸🇬', name: 'سنگاپور', host: 'ProxyIP.SG.CMLiussss.net' },
   { code: 'JP', country: 'JP', flag: '🇯🇵', name: 'ژاپن', host: 'ProxyIP.JP.CMLiussss.net' },
   { code: 'KR', country: 'KR', flag: '🇰🇷', name: 'کره جنوبی', host: 'ProxyIP.KR.CMLiussss.net' },
@@ -1860,6 +1863,26 @@ const PROXYIP_REGIONS = [
 ];
 
 const DEFAULT_PROXYIP_REGION = 'DE';
+const PROXYIP_BY_COUNTRY = new Map();
+for (const item of PROXYIP_REGIONS) {
+  if (item.country && !PROXYIP_BY_COUNTRY.has(item.country)) {
+    PROXYIP_BY_COUNTRY.set(item.country, item);
+  }
+}
+
+// Coloها کد فرودگاه هستند (FRA/AMS/...) ولی ProxyIPهای CMLiussss با کد
+// کشور/منطقه سرو می‌شوند (DE/NL/...). این نگاشت جلوی ساخت دامنه‌های
+// ناموجودی مثل ProxyIP.FRA.CMLiussss.net را می‌گیرد.
+function proxyIpCodeForPlacement(colo = '') {
+  const placement = getPlacementRegion(colo);
+  if (!placement) return DEFAULT_PROXYIP_REGION;
+  if (placement.country === 'US') {
+    return placement.colo === 'SJC' ? 'LAX' : 'IAD';
+  }
+  const region = PROXYIP_BY_COUNTRY.get(placement.country);
+  return region ? region.code : DEFAULT_PROXYIP_REGION;
+}
+
 const PROXYIP_FALLBACKS = [
   'ProxyIP.Oracle.CMLiussss.net:443',
   'bpb.yousef.isegaro.com:443'
@@ -1943,7 +1966,14 @@ function resolveProxyIpValue(value = '', colo = '') {
   const first = raw.split(',')[0].trim();
   if (!first || /^auto$/i.test(first)) {
     const cleanColo = String(colo || '').trim().toUpperCase();
-    return `ProxyIP.${/^[A-Z]{3}$/.test(cleanColo) ? cleanColo : 'FRA'}.CMLiussss.net:443`;
+    return proxyIpHostForCode(proxyIpCodeForPlacement(cleanColo));
+  }
+  // لینک‌های قدیمی که با Colo ساخته شده‌اند (ProxyIP.FRA/AMS/...) را هم
+  // به دامنهٔ واقعی ProxyIP همان کشور نگاشت می‌کنیم.
+  const legacyColo = first.match(/^ProxyIP\.([A-Za-z]{3})\.CMLiussss\.net(?::(\d+))?$/i);
+  if (legacyColo && !getProxyIpRegion(legacyColo[1]) && getPlacementRegion(legacyColo[1])) {
+    const port = legacyColo[2] || '443';
+    return `ProxyIP.${proxyIpCodeForPlacement(legacyColo[1])}.CMLiussss.net:${port}`;
   }
   return first;
 }
@@ -2092,8 +2122,10 @@ function normalizeEffectiveConfig(rawConfig = {}) {
   // حذف HTTP فقط با سوییچ صریح dkby انجام می‌شود.
   snap.alpn = normalizeAlpn(snap.alpn);
   const parsedCount = parseInt(snap.subNodeCount, 10);
-  // ۰ = بدون سقف (موتور خودش تعداد نودها را تعیین می‌کند)
-  snap.subNodeCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
+  // ۰ = خودکار (موتور خودش تعداد نودها را تا سقف ۳۵۰ تعیین می‌کند)
+  snap.subNodeCount = Number.isFinite(parsedCount) && parsedCount >= 0
+    ? Math.min(parsedCount, MAX_SUB_NODE_COUNT)
+    : 0;
   const rawRegion = String(rawConfig?.region || '').trim().toUpperCase();
   const hadExplicitPlacement = rawConfig?.placement !== undefined && String(rawConfig.placement || '').trim() !== '';
   const legacyPlacement = !hadExplicitPlacement && /^[A-Z]{2}$/.test(rawRegion) && rawRegion !== 'AUTO' && rawRegion !== 'CF'
@@ -4802,7 +4834,7 @@ function normalizeNodeLimit(value) {
   const parsed = parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
   if (parsed === 50 || parsed === 100) return 0;
-  return parsed;
+  return Math.min(parsed, MAX_SUB_NODE_COUNT);
 }
 
 function detectD1Binding(env) {
@@ -7984,13 +8016,17 @@ function buildNodeRoutingPlan(cfg = {}, requestColo = '') {
           flag: region ? region.flag : '⚡'
         }];
       } else {
-        proxies = placements.map(slot => ({
-          // طبق قرارداد درخواستی، حالت sync از خود کد Colo استفاده می‌کند.
-          host: `ProxyIP.${slot.colo}.CMLiussss.net:443`,
-          code: slot.country,
-          cc: slot.country,
-          flag: slot.flag
-        }));
+        proxies = placements.map(slot => {
+          // Colo کد فرودگاه است (FRA/AMS)؛ ProxyIP با کد کشور/منطقه سرو
+          // می‌شود (DE/NL). استفادهٔ مستقیم از Colo دامنهٔ ناموجود می‌ساخت.
+          const proxy = getProxyIpRegion(proxyIpCodeForPlacement(slot.colo));
+          return {
+            host: proxy ? proxyIpHostForCode(proxy.code) : 'auto',
+            code: proxy ? proxy.code : 'AUTO',
+            cc: proxy ? proxy.country : slot.country,
+            flag: proxy ? proxy.flag : slot.flag
+          };
+        });
       }
     } else if (mode === 'multi_cmliu') {
       const codes = normalizeProxyMultiRegions(cfg.proxyMultiRegions).split(',');
@@ -10510,8 +10546,13 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   if (!domainMode && !ipv6Mode && enableNative && nodeScope !== 'edge') {
     // اگر هاست پنل روی pages.dev یا workers.dev است، در ایران رکورد DNS آن مسدود است؛
     // بنابراین آدرس اتصال نود Origin را روی آی‌پی تمیز Anycast کلادفلر قرار می‌دهیم تا ۱۰۰٪ پینگ بدهد!
+    // اول از آدرس اختصاصی خود کاربر استفاده می‌کنیم تا دو کاربر آی‌پی مشترک نگیرند؛
+    // انتخاب تصادفی از استخر رسمی می‌توانست بین دو کاربر تصادفاً یکی شود.
+    const originCandidates = parseCustomPreferredString(cfg.yx).ipList
+      .map(item => item.ip)
+      .filter(ip => ip && !String(ip).includes(':'));
     const originConnIp = isFilteredPagesOrWorkersHost(workerHost)
-      ? (pickStableAddresses(OFFICIAL_DIRECT_IPS, 1, addrSeed + '-origin')[0] || OFFICIAL_DIRECT_IPS[0])
+      ? (originCandidates[0] || pickStableAddresses(OFFICIAL_DIRECT_IPS, 1, addrSeed + '-origin')[0] || OFFICIAL_DIRECT_IPS[0])
       : workerHost;
     appendFromSource([{ ip: originConnIp, isp: 'Origin' }]);
   }
@@ -10675,7 +10716,11 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   const subNodeCountRaw = queryOverrides.limit !== undefined
     ? parseInt(queryOverrides.limit, 10)
     : Number(userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 0);
-  const subNodeCount = Number.isFinite(subNodeCountRaw) && subNodeCountRaw > 0 ? subNodeCountRaw : 0;
+  // حتی در حالت خودکار (۰/نامعتبر) سقف سخت ۳۵۰ نود اعمال می‌شود؛
+  // مقدارهای بزرگ‌تر هم به همان سقف محدود می‌شوند.
+  const subNodeCount = Number.isFinite(subNodeCountRaw) && subNodeCountRaw > 0
+    ? Math.min(subNodeCountRaw, MAX_SUB_NODE_COUNT)
+    : MAX_SUB_NODE_COUNT;
 
   // توزیع مساوی ترکیب‌ها (پروتکل × IPv4/IPv6/Domain) و بعد چرخش زمانی اختیاری
   const balancedEntries = balanceComboEntries(allEntries, subNodeCount);
@@ -10698,7 +10743,15 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
 
   // ساب‌لینک فقط نود واقعی دارد: نودهای «اطلاع‌رسانی» با آدرس 127.0.0.1 در کلاینت
   // کار نمی‌کردند و کاربر فکر می‌کرد نود خراب است؛ دیگر تزریق نمی‌شوند.
-  const result = [...finalized, ...warpLinks];
+  // سقف روی مجموع نودهای اصلی و WARP اعمال می‌شود؛ جای WARP حفظ می‌شود
+  // و اگر لازم شد فقط از انتهای نودهای اصلی کم می‌کنیم.
+  const combined = [...finalized, ...warpLinks];
+  const result = combined.length <= MAX_SUB_NODE_COUNT
+    ? combined
+    : [
+        ...finalized.slice(0, Math.max(0, MAX_SUB_NODE_COUNT - warpLinks.length)),
+        ...warpLinks
+      ].slice(0, MAX_SUB_NODE_COUNT);
   rememberNodes(cachedKey, result);
   return result;
 }
@@ -13389,30 +13442,10 @@ async function establishOutboundAndPipe(
     }
   }
 
-  // وقتی مسیر نود صریحاً ProxyIP دارد و بستهٔ کلاینت TLS است، ابتدا همان
-  // مقصد را امتحان می‌کنیم؛ اگر جواب نداد، زنجیرهٔ Oracle/BPB و سپس مستقیم.
-  const preferProxyIp = Boolean(
-    fallbackCandidates.length &&
-    !proxyEnabled &&
-    hasTlsClientHello(firstPacket)
-  );
+  // مسیر مستقیم اولویت دارد تا نود حتی وقتی ProxyIP کند/مسدود است پینگ بدهد؛
+  // اگر مقصد مستقیم جواب نداد، زنجیرهٔ ProxyIP/Oracle/BPB به‌عنوان fallback
+  // اجرا می‌شود. این ترتیب قبلاً برعکس بود و باعث تایم‌اوت همهٔ نودها می‌شد.
   try {
-    if (preferProxyIp) {
-      // ابتدا تمام زنجیرهٔ ProxyIP (مقصد نود، Oracle، BPB) امتحان می‌شود؛
-      // مسیر مستقیم فقط بعد از شکست همهٔ آن‌ها و به‌عنوان آخرین راه است.
-      for (const candidate of fallbackCandidates) {
-        try {
-          const parsed = parseAddressAndPort(candidate);
-          if (!parsed?.address) continue;
-          const { remoteSock, writer } = await connectAndSend(parsed.address, parsed.port || 443, false);
-          bindRemote(remoteSock, writer, () => {
-            detachIfCurrent(remoteSock, writer);
-            retryConnect('close');
-          });
-          return;
-        } catch (_proxyFirstErr) {}
-      }
-    }
     const firstHopProxy = proxyOnly && proxyEnabled ? true : downgradeEnabled ? false : proxyEnabled;
     const { remoteSock, writer } = await connectAndSend(host, port, firstHopProxy);
     bindRemote(remoteSock, writer, () => {
@@ -22628,7 +22661,7 @@ ${PWA_HEAD_TAGS}
             <div class="help-card">
               <h4>${icon('gauge')} تعداد نود هر کاربر</h4>
               <ul>
-                <li>تعداد نود به‌صورت خودکار از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت ساخته می‌شود؛ مقدار ۰ یعنی بدون سقف.</li>
+                <li>تعداد نود به‌صورت خودکار از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت ساخته می‌شود؛ مقدار ۰ یعنی خودکار و حداکثر ${MAX_SUB_NODE_COUNT} نود.</li>
                 <li>آدرس‌ها از همهٔ مخزن‌ها (IPv4، IPv6، دامنه، ProxyIP و SOCKS/HTTP) انتخاب می‌شوند.</li>
                 <li>هر کاربر آدرس‌های اختصاصی می‌گیرد؛ آدرس کاربران قبلی دوباره استفاده نمی‌شود.</li>
               </ul>
@@ -24381,9 +24414,9 @@ ${PWA_HEAD_TAGS}
       '<div class="field"><label>حجم مجاز (گیگابایت) — ۰ = نامحدود</label><input type="number" id="uf_dataLimitGb" min="0" step="1" list="dlDataLimit" value="' + Number((user && user.dataLimitGb) || 0) + '"></div>' +
       '<div class="field"><label>مدت اعتبار (روز) — ۰ = بدون انقضا</label><input type="number" id="uf_expireDays" min="0" step="1" list="dlExpireDays" value="' + Number((user && user.expireDays) || 0) + '"></div>' +
       '<div class="field"><label>سقف دستگاه متصل</label><input type="number" id="uf_ipLimit" min="1" max="200" step="1" value="' + Number((user && user.ipLimit) || 50) + '"></div>' +
-      '<div class="field"><label>تعداد نود در ساب‌لینک (۰ = خودکار)</label><input type="number" id="uf_subNodeCount" min="0" step="1" value="' + Math.max(0, Number((user && user.subNodeCount) || 0)) + '"></div>' +
+      '<div class="field"><label>تعداد نود در ساب‌لینک (۰ = خودکار — حداکثر ' + MAX_SUB_NODE_COUNT + ')</label><input type="number" id="uf_subNodeCount" min="0" max="' + MAX_SUB_NODE_COUNT + '" step="1" value="' + Math.min(MAX_SUB_NODE_COUNT, Math.max(0, Number((user && user.subNodeCount) || 0))) + '"></div>' +
       '</div>' +
-      '<div class="field" style="margin-top:10px;"><span class="field-hint">مقدار ۰ یعنی بدون سقف؛ تعداد نهایی از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت (TLS/HTTP) محاسبه می‌شود. برای قفل‌کردن نودها روی یک آی‌پی، از تب «آدرس‌ها و منطقه» حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
+      '<div class="field" style="margin-top:10px;"><span class="field-hint">مقدار ۰ یعنی خودکار؛ تعداد نهایی از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت (TLS/HTTP) محاسبه می‌شود و از ' + MAX_SUB_NODE_COUNT + ' نود بیشتر نمی‌شود. برای قفل‌کردن نودها روی یک آی‌پی، از تب «آدرس‌ها و منطقه» حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
 
     var tabButton = function(id, label, iconName) {
       var on = activeTab === id;
@@ -24439,7 +24472,7 @@ ${PWA_HEAD_TAGS}
       dataLimitGb: Number(val('uf_dataLimitGb', '0')) || 0,
       expireDays: Number(val('uf_expireDays', '0')) || 0,
       ipLimit: Number(val('uf_ipLimit', '50')) || 50,
-      subNodeCount: Math.max(0, parseInt(val('uf_subNodeCount', '0'), 10) || 0),
+      subNodeCount: Math.min(MAX_SUB_NODE_COUNT, Math.max(0, parseInt(val('uf_subNodeCount', '0'), 10) || 0)),
       config: config
     };
   }

@@ -10,7 +10,7 @@ import path from 'node:path';
 import assert from 'node:assert';
 import nodeCrypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { CF_PORT_CHOICES, VERSION } from '../src/config/defaults.js';
+import { CF_PORT_CHOICES, MAX_SUB_NODE_COUNT, VERSION } from '../src/config/defaults.js';
 
 if (!globalThis.crypto && nodeCrypto.webcrypto) {
   globalThis.crypto = nodeCrypto.webcrypto;
@@ -423,6 +423,7 @@ async function runTests() {
     const rawLinksText = await subRawResp.text();
     const rawLines = rawLinksText.trim().split('\n').filter(Boolean);
     assert.ok(rawLines.length > 0, `تعداد نودهای تولیدشده باید متناسب با آدرس/پورت/پروتکل بیشتر از صفر باشد ولی ${rawLines.length} بود`);
+    assert.ok(rawLines.length <= MAX_SUB_NODE_COUNT, `تعداد نودها نباید از سقف ${MAX_SUB_NODE_COUNT} بیشتر باشد ولی ${rawLines.length} بود`);
     const rawPorts = new Set(rawLines.map(line => new URL(line).port));
     assert.ok(rawPorts.size >= 6, `باید حداقل ۳ پورت TLS و ۳ پورت HTTP در نودها باشد ولی ${[...rawPorts].join(',')} بود`);
 

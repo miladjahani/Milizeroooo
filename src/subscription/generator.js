@@ -13,6 +13,7 @@ import {
   DIRECT_DOMAINS,
   FALLBACK_PROXY_IPS,
   FRAGMENT_PRESETS,
+  MAX_SUB_NODE_COUNT,
   MULTI_PLACEMENT_COLOS,
   OFFICIAL_DIRECT_IPS,
   OFFICIAL_DIRECT_IPV6,
@@ -40,6 +41,7 @@ import {
   normalizeProxyMultiRegions,
   normalizeProxyRegion,
   parseNodePorts,
+  proxyIpCodeForPlacement,
   proxyIpHostForCode
 } from '../config/defaults.js';
 import {
@@ -208,13 +210,17 @@ export function buildNodeRoutingPlan(cfg = {}, requestColo = '') {
           flag: region ? region.flag : '⚡'
         }];
       } else {
-        proxies = placements.map(slot => ({
-          // طبق قرارداد درخواستی، حالت sync از خود کد Colo استفاده می‌کند.
-          host: `ProxyIP.${slot.colo}.CMLiussss.net:443`,
-          code: slot.country,
-          cc: slot.country,
-          flag: slot.flag
-        }));
+        proxies = placements.map(slot => {
+          // Colo کد فرودگاه است (FRA/AMS)؛ ProxyIP با کد کشور/منطقه سرو
+          // می‌شود (DE/NL). استفادهٔ مستقیم از Colo دامنهٔ ناموجود می‌ساخت.
+          const proxy = getProxyIpRegion(proxyIpCodeForPlacement(slot.colo));
+          return {
+            host: proxy ? proxyIpHostForCode(proxy.code) : 'auto',
+            code: proxy ? proxy.code : 'AUTO',
+            cc: proxy ? proxy.country : slot.country,
+            flag: proxy ? proxy.flag : slot.flag
+          };
+        });
       }
     } else if (mode === 'multi_cmliu') {
       const codes = normalizeProxyMultiRegions(cfg.proxyMultiRegions).split(',');
@@ -2734,8 +2740,13 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   if (!domainMode && !ipv6Mode && enableNative && nodeScope !== 'edge') {
     // اگر هاست پنل روی pages.dev یا workers.dev است، در ایران رکورد DNS آن مسدود است؛
     // بنابراین آدرس اتصال نود Origin را روی آی‌پی تمیز Anycast کلادفلر قرار می‌دهیم تا ۱۰۰٪ پینگ بدهد!
+    // اول از آدرس اختصاصی خود کاربر استفاده می‌کنیم تا دو کاربر آی‌پی مشترک نگیرند؛
+    // انتخاب تصادفی از استخر رسمی می‌توانست بین دو کاربر تصادفاً یکی شود.
+    const originCandidates = parseCustomPreferredString(cfg.yx).ipList
+      .map(item => item.ip)
+      .filter(ip => ip && !String(ip).includes(':'));
     const originConnIp = isFilteredPagesOrWorkersHost(workerHost)
-      ? (pickStableAddresses(OFFICIAL_DIRECT_IPS, 1, addrSeed + '-origin')[0] || OFFICIAL_DIRECT_IPS[0])
+      ? (originCandidates[0] || pickStableAddresses(OFFICIAL_DIRECT_IPS, 1, addrSeed + '-origin')[0] || OFFICIAL_DIRECT_IPS[0])
       : workerHost;
     appendFromSource([{ ip: originConnIp, isp: 'Origin' }]);
   }
@@ -2899,7 +2910,11 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const subNodeCountRaw = queryOverrides.limit !== undefined
     ? parseInt(queryOverrides.limit, 10)
     : Number(userOrConfig?.subNodeCount ?? cfg.subNodeCount ?? 0);
-  const subNodeCount = Number.isFinite(subNodeCountRaw) && subNodeCountRaw > 0 ? subNodeCountRaw : 0;
+  // حتی در حالت خودکار (۰/نامعتبر) سقف سخت ۳۵۰ نود اعمال می‌شود؛
+  // مقدارهای بزرگ‌تر هم به همان سقف محدود می‌شوند.
+  const subNodeCount = Number.isFinite(subNodeCountRaw) && subNodeCountRaw > 0
+    ? Math.min(subNodeCountRaw, MAX_SUB_NODE_COUNT)
+    : MAX_SUB_NODE_COUNT;
 
   // توزیع مساوی ترکیب‌ها (پروتکل × IPv4/IPv6/Domain) و بعد چرخش زمانی اختیاری
   const balancedEntries = balanceComboEntries(allEntries, subNodeCount);
@@ -2922,7 +2937,15 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
 
   // ساب‌لینک فقط نود واقعی دارد: نودهای «اطلاع‌رسانی» با آدرس 127.0.0.1 در کلاینت
   // کار نمی‌کردند و کاربر فکر می‌کرد نود خراب است؛ دیگر تزریق نمی‌شوند.
-  const result = [...finalized, ...warpLinks];
+  // سقف روی مجموع نودهای اصلی و WARP اعمال می‌شود؛ جای WARP حفظ می‌شود
+  // و اگر لازم شد فقط از انتهای نودهای اصلی کم می‌کنیم.
+  const combined = [...finalized, ...warpLinks];
+  const result = combined.length <= MAX_SUB_NODE_COUNT
+    ? combined
+    : [
+        ...finalized.slice(0, Math.max(0, MAX_SUB_NODE_COUNT - warpLinks.length)),
+        ...warpLinks
+      ].slice(0, MAX_SUB_NODE_COUNT);
   rememberNodes(cachedKey, result);
   return result;
 }

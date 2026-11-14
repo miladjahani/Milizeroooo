@@ -973,30 +973,10 @@ async function establishOutboundAndPipe(
     }
   }
 
-  // وقتی مسیر نود صریحاً ProxyIP دارد و بستهٔ کلاینت TLS است، ابتدا همان
-  // مقصد را امتحان می‌کنیم؛ اگر جواب نداد، زنجیرهٔ Oracle/BPB و سپس مستقیم.
-  const preferProxyIp = Boolean(
-    fallbackCandidates.length &&
-    !proxyEnabled &&
-    hasTlsClientHello(firstPacket)
-  );
+  // مسیر مستقیم اولویت دارد تا نود حتی وقتی ProxyIP کند/مسدود است پینگ بدهد؛
+  // اگر مقصد مستقیم جواب نداد، زنجیرهٔ ProxyIP/Oracle/BPB به‌عنوان fallback
+  // اجرا می‌شود. این ترتیب قبلاً برعکس بود و باعث تایم‌اوت همهٔ نودها می‌شد.
   try {
-    if (preferProxyIp) {
-      // ابتدا تمام زنجیرهٔ ProxyIP (مقصد نود، Oracle، BPB) امتحان می‌شود؛
-      // مسیر مستقیم فقط بعد از شکست همهٔ آن‌ها و به‌عنوان آخرین راه است.
-      for (const candidate of fallbackCandidates) {
-        try {
-          const parsed = parseAddressAndPort(candidate);
-          if (!parsed?.address) continue;
-          const { remoteSock, writer } = await connectAndSend(parsed.address, parsed.port || 443, false);
-          bindRemote(remoteSock, writer, () => {
-            detachIfCurrent(remoteSock, writer);
-            retryConnect('close');
-          });
-          return;
-        } catch (_proxyFirstErr) {}
-      }
-    }
     const firstHopProxy = proxyOnly && proxyEnabled ? true : downgradeEnabled ? false : proxyEnabled;
     const { remoteSock, writer } = await connectAndSend(host, port, firstHopProxy);
     bindRemote(remoteSock, writer, () => {
