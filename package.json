@@ -1,6 +1,6 @@
 {
   "name": "miliconfig",
-  "version": "3.13.1",
+  "version": "3.14.0",
   "description": "miliconfig v3.1 - Multi-user Cloudflare Workers & Pages Proxy Control Center with D1 Database & Advanced Obfuscation",
   "type": "module",
   "main": "src/index.js",
