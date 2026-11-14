@@ -68,6 +68,16 @@ export const CONFIG_DEFAULTS = {
   // تا سرویس‌هایی که آی‌پی ایران را مسدود می‌کنند باز شوند.
   sb: 'yes',
   sbRegion: 'DE', // منطقهٔ آدرس واسط پیشنهادی (DE/NL/US/…)
+  // — Placement کلودفلر: auto | multi_placement | manual_placement:<COLO>
+  // مقدار ترکیبی برای یک دراپ‌داون نگه داشته می‌شود تا هر سه حالت در یک انتخاب باشد.
+  placement: 'auto',
+  placementMode: 'auto',
+  placementColo: '',
+  placementTargets: '',
+  // — مسیر تحریم‌شکن: sync_placement | multi_cmliu | manual_proxyip
+  proxyMode: 'sync_placement',
+  proxyRegion: 'DE',
+  proxyMultiRegions: 'DE,NL,UK,FR,FI,PL,TR,IAD,LAX,CA,AE,SG,JP,KR,HK,Oracle,DigitalOcean,Vultr,BPB',
   // — گزینه‌های کلاینت که در کانفیگ‌های تولیدشده اعمال می‌شوند
   doh: 'yes', // DNS over HTTPS در کانفیگ کلاینت
   tcp: 'yes', // TCP fast-open / tcp-concurrent در کانفیگ کلاینت
@@ -467,6 +477,141 @@ export {
   WARP_REGISTRATION_URL
 };
 
+// ----------------------------------------------------------------------------
+// Placement کلودفلر و مقاصد ProxyIP خانوادهٔ CMLiussss
+// ----------------------------------------------------------------------------
+// هر منطقهٔ Placement، کد Colo، کشور نمایشی و شناسه‌های استاندارد ابری را دارد.
+// این فهرست هم برای دراپ‌داون مودال و هم برای نام‌گذاری/مسیر نودها استفاده می‌شود.
+export const PLACEMENT_REGIONS = [
+  { colo: 'FRA', country: 'DE', flag: '🇩🇪', name: 'آلمان - فرانکفورت', targets: ['aws:eu-central-1', 'azure:germanywestcentral', 'gcp:europe-west3'] },
+  { colo: 'AMS', country: 'NL', flag: '🇳🇱', name: 'هلند - آمستردام', targets: ['azure:westeurope', 'gcp:europe-west4'] },
+  { colo: 'LHR', country: 'GB', flag: '🇬🇧', name: 'انگلیس - لندن', targets: ['aws:eu-west-2', 'azure:uksouth'] },
+  { colo: 'CDG', country: 'FR', flag: '🇫🇷', name: 'فرانسه - پاریس', targets: ['aws:eu-west-3', 'azure:francecentral'] },
+  { colo: 'HEL', country: 'FI', flag: '🇫🇮', name: 'فنلاند - هلسینکی', targets: ['gcp:europe-north1'] },
+  { colo: 'ARN', country: 'SE', flag: '🇸🇪', name: 'سوئد - استکهلم', targets: ['aws:eu-north-1', 'azure:swedencentral'] },
+  { colo: 'WAW', country: 'PL', flag: '🇵🇱', name: 'لهستان - ورشو', targets: ['azure:polandcentral', 'gcp:europe-central2'] },
+  { colo: 'ZRH', country: 'CH', flag: '🇨🇭', name: 'سوئیس - زوریخ', targets: ['aws:eu-central-2', 'azure:switzerlandnorth'] },
+  { colo: 'DXB', country: 'AE', flag: '🇦🇪', name: 'امارات - دبی', targets: ['aws:me-central-1', 'azure:uaenorth'] },
+  { colo: 'IAD', country: 'US', flag: '🇺🇸', name: 'آمریکا شرق - ویرجینیا', targets: ['aws:us-east-1', 'azure:eastus', 'gcp:us-east4'] },
+  { colo: 'SJC', country: 'US', flag: '🇺🇸', name: 'آمریکا غرب - کالیفرنیا', targets: ['aws:us-west-1', 'azure:westus'] },
+  { colo: 'SIN', country: 'SG', flag: '🇸🇬', name: 'سنگاپور', targets: ['aws:ap-southeast-1', 'azure:southeastasia'] },
+  { colo: 'NRT', country: 'JP', flag: '🇯🇵', name: 'ژاپن - توکیو', targets: ['aws:ap-northeast-1', 'azure:japaneast'] },
+  { colo: 'ICN', country: 'KR', flag: '🇰🇷', name: 'کره جنوبی - سئول', targets: ['aws:ap-northeast-2', 'azure:koreacentral'] }
+];
+
+export const MULTI_PLACEMENT_COLOS = PLACEMENT_REGIONS.map(item => item.colo);
+
+export const PROXYIP_REGIONS = [
+  { code: 'DE', country: 'DE', flag: '🇩🇪', name: 'آلمان', host: 'ProxyIP.DE.CMLiussss.net' },
+  { code: 'NL', country: 'NL', flag: '🇳🇱', name: 'هلند', host: 'ProxyIP.NL.CMLiussss.net' },
+  { code: 'UK', country: 'GB', flag: '🇬🇧', name: 'بریتانیا', host: 'ProxyIP.UK.CMLiussss.net' },
+  { code: 'FR', country: 'FR', flag: '🇫🇷', name: 'فرانسه', host: 'ProxyIP.FR.CMLiussss.net' },
+  { code: 'FI', country: 'FI', flag: '🇫🇮', name: 'فنلاند', host: 'ProxyIP.FI.CMLiussss.net' },
+  { code: 'PL', country: 'PL', flag: '🇵🇱', name: 'لهستان', host: 'ProxyIP.PL.CMLiussss.net' },
+  { code: 'TR', country: 'TR', flag: '🇹🇷', name: 'ترکیه', host: 'ProxyIP.TR.CMLiussss.net' },
+  { code: 'IAD', country: 'US', flag: '🇺🇸', name: 'ایالات متحده شرق', host: 'ProxyIP.IAD.CMLiussss.net' },
+  { code: 'LAX', country: 'US', flag: '🇺🇸', name: 'ایالات متحده غرب', host: 'ProxyIP.LAX.CMLiussss.net' },
+  { code: 'CA', country: 'CA', flag: '🇨🇦', name: 'کانادا', host: 'ProxyIP.CA.CMLiussss.net' },
+  { code: 'AE', country: 'AE', flag: '🇦🇪', name: 'امارات', host: 'ProxyIP.AE.CMLiussss.net' },
+  { code: 'SG', country: 'SG', flag: '🇸🇬', name: 'سنگاپور', host: 'ProxyIP.SG.CMLiussss.net' },
+  { code: 'JP', country: 'JP', flag: '🇯🇵', name: 'ژاپن', host: 'ProxyIP.JP.CMLiussss.net' },
+  { code: 'KR', country: 'KR', flag: '🇰🇷', name: 'کره جنوبی', host: 'ProxyIP.KR.CMLiussss.net' },
+  { code: 'HK', country: 'HK', flag: '🇭🇰', name: 'هنگ‌کنگ', host: 'ProxyIP.HK.CMLiussss.net' },
+  { code: 'Oracle', country: '', flag: '☁️', name: 'دیتاسنتر اوراکل', host: 'ProxyIP.Oracle.CMLiussss.net' },
+  { code: 'DigitalOcean', country: '', flag: '🌊', name: 'دیجیتال‌اوشن', host: 'ProxyIP.DigitalOcean.CMLiussss.net' },
+  { code: 'Vultr', country: '', flag: '🦅', name: 'ولتر کلود', host: 'ProxyIP.Vultr.CMLiussss.net' },
+  { code: 'BPB', country: '', flag: '🛡️', name: 'سرور پرسرعت BPB', host: 'bpb.yousef.isegaro.com' }
+];
+
+export const DEFAULT_PROXYIP_REGION = 'DE';
+export const PROXYIP_FALLBACKS = [
+  'ProxyIP.Oracle.CMLiussss.net:443',
+  'bpb.yousef.isegaro.com:443'
+];
+
+const PLACEMENT_BY_COLO = new Map(PLACEMENT_REGIONS.map(item => [item.colo, item]));
+const PROXYIP_BY_CODE = new Map(PROXYIP_REGIONS.map(item => [item.code.toLowerCase(), item]));
+const PLACEMENT_BY_COUNTRY = new Map(PLACEMENT_REGIONS.map(item => [item.country, item]));
+
+export function getPlacementRegion(value = '') {
+  return PLACEMENT_BY_COLO.get(String(value || '').trim().toUpperCase()) || null;
+}
+
+export function getProxyIpRegion(value = '') {
+  return PROXYIP_BY_CODE.get(String(value || '').trim().toLowerCase()) || null;
+}
+
+export function placementForCountry(country = '') {
+  return PLACEMENT_BY_COUNTRY.get(String(country || '').trim().toUpperCase()) || null;
+}
+
+// مقدار یکتای دراپ‌داون اول را به mode/colo/targets تجزیه می‌کند.
+// ورودی‌های قدیمی مثل «DE» یا «FRA» هم به حالت دستی نگاشت می‌شوند.
+export function normalizePlacementValue(value = '', fallbackColo = '') {
+  const raw = String(value || '').trim();
+  if (!raw || /^auto$/i.test(raw) || /^cf$/i.test(raw)) {
+    return { mode: 'auto', colo: '', region: null, value: 'auto' };
+  }
+  if (/^(multi|multi_placement|multiple)$/i.test(raw)) {
+    return { mode: 'multi_placement', colo: '', region: null, value: 'multi_placement' };
+  }
+  let candidate = raw;
+  const manual = raw.match(/^manual_placement(?::(.+))?$/i);
+  if (manual) candidate = manual[1] || fallbackColo || '';
+  const byCountry = placementForCountry(candidate);
+  const region = getPlacementRegion(candidate) || byCountry;
+  if (region) {
+    return {
+      mode: 'manual_placement',
+      colo: region.colo,
+      region,
+      value: `manual_placement:${region.colo}`
+    };
+  }
+  return { mode: 'auto', colo: '', region: null, value: 'auto' };
+}
+
+export function normalizeProxyMode(value = '') {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'multi' || raw === 'multi_cmliu' || raw === 'multi_proxyip') return 'multi_cmliu';
+  if (raw === 'manual' || raw === 'manual_proxyip' || raw === 'single') return 'manual_proxyip';
+  return 'sync_placement';
+}
+
+export function normalizeProxyRegion(value = '') {
+  return getProxyIpRegion(value)?.code || DEFAULT_PROXYIP_REGION;
+}
+
+export function normalizeProxyMultiRegions(value = '') {
+  const list = String(value || '').split(',').map(part => part.trim()).filter(Boolean);
+  const out = [];
+  const seen = new Set();
+  for (const part of list) {
+    const item = getProxyIpRegion(part);
+    if (!item || seen.has(item.code)) continue;
+    seen.add(item.code);
+    out.push(item.code);
+  }
+  return out.length ? out.join(',') : CONFIG_DEFAULTS.proxyMultiRegions;
+}
+
+export function proxyIpHostForCode(code = '') {
+  const item = getProxyIpRegion(code);
+  return item ? `${item.host}:443` : '';
+}
+
+// پاسخ به proxyip=auto: Colo همان درخواست را می‌گیرد؛ اگر در محیط تست
+// request.cf نبود، FRA به‌عنوان پیش‌فرض امن استفاده می‌شود.
+export function resolveProxyIpValue(value = '', colo = '') {
+  const raw = String(value || '').trim();
+  const first = raw.split(',')[0].trim();
+  if (!first || /^auto$/i.test(first)) {
+    const cleanColo = String(colo || '').trim().toUpperCase();
+    return `ProxyIP.${/^[A-Z]{3}$/.test(cleanColo) ? cleanColo : 'FRA'}.CMLiussss.net:443`;
+  }
+  return first;
+}
+
 export const REGION_MAP = {
   CF: ['🌐 مستقیم رسمی CF', 'CF', 'Cloudflare Direct'],
   HK: ['🇭🇰 هنگ‌کنگ', 'HK', 'Hong Kong'],
@@ -613,6 +758,23 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   const parsedCount = parseInt(snap.subNodeCount, 10);
   // ۰ = بدون سقف (موتور خودش تعداد نودها را تعیین می‌کند)
   snap.subNodeCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
+  const rawRegion = String(rawConfig?.region || '').trim().toUpperCase();
+  const hadExplicitPlacement = rawConfig?.placement !== undefined && String(rawConfig.placement || '').trim() !== '';
+  const legacyPlacement = !hadExplicitPlacement && /^[A-Z]{2}$/.test(rawRegion) && rawRegion !== 'AUTO' && rawRegion !== 'CF'
+    ? placementForCountry(rawRegion)?.colo || ''
+    : '';
+  const placementInfo = normalizePlacementValue(
+    hadExplicitPlacement ? rawConfig.placement : legacyPlacement,
+    rawConfig?.placementColo || ''
+  );
+  snap.placement = placementInfo.value;
+  snap.placementMode = placementInfo.mode;
+  snap.placementColo = placementInfo.colo;
+  snap.placementTargets = placementInfo.mode === 'manual_placement'
+    ? placementInfo.region.targets.join(',')
+    : placementInfo.mode === 'multi_placement'
+      ? MULTI_PLACEMENT_COLOS.join(',')
+      : '';
   snap.region = String(snap.region || 'auto').trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(snap.region)) snap.region = 'auto';
   // چرخش آی‌پی: «off» یا ۰ یعنی خاموش (پیش‌فرض)؛ عدد = دقیقه
@@ -631,6 +793,16 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   if (!snap.fragmentPackets) snap.fragmentPackets = 'tlshello';
   snap.sbRegion = String(snap.sbRegion || 'DE').trim().toUpperCase();
   if (!snap.sbRegion) snap.sbRegion = 'DE';
+  // مهاجرت نرم: تنظیمات قدیمی که فقط region/sbRegion داشتند، همان کشور خروجی
+  // را به‌عنوان حالت دستی تحریم‌شکن نگه می‌دارند.
+  const hadExplicitProxyMode = rawConfig?.proxyMode !== undefined && String(rawConfig.proxyMode || '').trim() !== '';
+  // مهاجرت نرم: اگر نسخهٔ قدیمی p دستی داشت، همان مقدار نباید با حالت خودکار نادیده گرفته شود.
+  const legacyProxyMode = !hadExplicitProxyMode && (
+    String(rawConfig?.p || '').trim() || (rawRegion && rawRegion !== 'AUTO' && rawRegion !== 'CF')
+  ) ? 'manual_proxyip' : 'sync_placement';
+  snap.proxyMode = normalizeProxyMode(hadExplicitProxyMode ? rawConfig.proxyMode : legacyProxyMode);
+  snap.proxyRegion = normalizeProxyRegion(rawConfig?.proxyRegion || (legacyProxyMode === 'manual_proxyip' ? rawRegion : snap.sbRegion));
+  snap.proxyMultiRegions = normalizeProxyMultiRegions(rawConfig?.proxyMultiRegions || CONFIG_DEFAULTS.proxyMultiRegions);
   snap.ipMode = String(snap.ipMode || '').toLowerCase() === 'fixed' ? 'fixed' : 'country';
   snap.ipPinned = String(snap.ipPinned || '').trim();
   if (snap.ipMode === 'fixed') snap.ipRotation = 'off';

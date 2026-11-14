@@ -36,6 +36,16 @@ const memoryStore = {
 };
 let schemaInitPromise = null;
 
+// ۰ یعنی «خودکار»؛ تعداد نهایی را موتور بر اساس پروتکل‌ها، پورت‌ها و
+// آدرس‌های موجود می‌سازد. مقادیر ۵۰/۱۰۰ فقط سقف‌های قدیمی بودند و به
+// حالت خودکار مهاجرت می‌کنند تا ساب‌های موجود هم دیگر بریده نشوند.
+function normalizeNodeLimit(value) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  if (parsed === 50 || parsed === 100) return 0;
+  return parsed;
+}
+
 export function detectD1Binding(env) {
   if (!env || typeof env !== 'object') return null;
   const priorityNames = ['DB', 'D1', 'db', 'd1', 'MILICONFIG_DB', 'miliconfig_db', 'DATABASE', 'database'];
@@ -214,7 +224,7 @@ export async function rotateAdminPath(env = {}) {
 // ستون‌های جدول users به‌تفکیک نوع — برای جدول‌هایی که با اسکیمای قدیمی‌تر
 // ساخته شده‌اند و ALTER TABLE لازم دارند.
 const USER_TABLE_COLUMNS = {
-  sub_node_count: 'INTEGER NOT NULL DEFAULT 50',
+  sub_node_count: 'INTEGER NOT NULL DEFAULT 0',
   status: "TEXT NOT NULL DEFAULT 'active'",
   enabled: 'INTEGER NOT NULL DEFAULT 1',
   data_limit_gb: 'REAL NOT NULL DEFAULT 0',
@@ -359,7 +369,7 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL,
       uuid TEXT NOT NULL UNIQUE,
-      sub_node_count INTEGER NOT NULL DEFAULT 50,
+      sub_node_count INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'active',
       enabled INTEGER NOT NULL DEFAULT 1,
       data_limit_gb REAL NOT NULL DEFAULT 0,
@@ -540,11 +550,11 @@ function mapUserRow(row) {
   } catch (_e) {
     parsedConfig = {};
   }
-  const subNodeCount = Number.isFinite(Number(row.sub_node_count ?? row.subNodeCount))
-    ? Number(row.sub_node_count ?? row.subNodeCount)
-    : Number(parsedConfig.subNodeCount ?? 50);
+  const subNodeCount = normalizeNodeLimit(row.sub_node_count ?? row.subNodeCount ?? parsedConfig.subNodeCount);
+  // عمداً CONFIG_DEFAULTS قبل از parsedConfig قرار نمی‌گیرد؛ وگرنه فیلدهای
+  // جدیدِ پیش‌فرض، تنظیمات قدیمی region/p را «صریح» جلوه می‌دهند و مهاجرت
+  // خودکار Placement/ProxyIP انجام نمی‌شود.
   const effectiveConfig = normalizeEffectiveConfig({
-    ...CONFIG_DEFAULTS,
     ...parsedConfig,
     subNodeCount
   });
@@ -905,8 +915,9 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
   const username = rawName || id;
   const uuid = isValidUuid(payload.uuid) ? String(payload.uuid).trim().toLowerCase() : generateUuidV4();
 
-  const subNodeCountRaw = parseInt(payload.subNodeCount ?? payload.config?.subNodeCount ?? globalCfg.subNodeCount ?? 100, 10);
-  const subNodeCount = Number.isFinite(subNodeCountRaw) ? Math.max(100, subNodeCountRaw) : 100;
+  const subNodeCount = normalizeNodeLimit(
+    payload.subNodeCount ?? payload.config?.subNodeCount ?? globalCfg.subNodeCount
+  );
 
   // هر کاربر تازه، مجموعهٔ آدرس اختصاصی خودش را از مخزن می‌گیرد؛ آدرس‌های
   // کاربران قبلی حذف می‌شوند تا دو کاربر آی‌پی یکسان نداشته باشند.
@@ -1083,11 +1094,9 @@ export async function updateUser(env = {}, userId, payload = {}, clientIp = '') 
   if (!existing) return null;
   const now = Date.now();
 
-  const subNodeCountRaw = parseInt(
-    payload.subNodeCount ?? payload.config?.subNodeCount ?? existing.subNodeCount ?? 100,
-    10
+  const subNodeCount = normalizeNodeLimit(
+    payload.subNodeCount ?? payload.config?.subNodeCount ?? existing.subNodeCount
   );
-  const subNodeCount = Number.isFinite(subNodeCountRaw) ? Math.max(100, subNodeCountRaw) : 100;
 
   const updatedConfig = ensureSubscriptionPortVariety(normalizeEffectiveConfig({
     ...existing.config,
@@ -1541,7 +1550,7 @@ export async function importFullBackup(env = {}, payload = {}, clientIp = '') {
         continue;
       }
       const uuid = isValidUuid(u.uuid) ? String(u.uuid).trim().toLowerCase() : generateUuidV4();
-      const subNodeCount = Number(u.subNodeCount ?? 50) || 50;
+      const subNodeCount = normalizeNodeLimit(u.subNodeCount);
       const status = String(u.status || 'active');
       const enabled = u.enabled !== false;
       const dataLimitGb = Math.max(0, Number(u.dataLimitGb) || 0);

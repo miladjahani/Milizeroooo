@@ -408,7 +408,7 @@ async function runTests() {
     assert.strictEqual(createdData.user.username, 'reza-vip');
 
     const newUserUuid = createdData.user.uuid;
-    assert.ok(createdData.user.subNodeCount >= 100, 'کاربر ساخته‌شده باید حداقل ۱۰۰ نود داشته باشد');
+    assert.strictEqual(createdData.user.subNodeCount, 0, 'کاربر ساخته‌شده باید در حالت خودکار (بدون سقف ۱۰۰) باشد');
     assert.ok(String(createdData.user.config.yx || '').split(',').length >= 20, 'ترکیب آدرس‌های کاربر باید از چند نوع مخزن ساخته شود');
     assert.ok(String(createdData.user.config.yx || '').includes('['), 'ترکیب آدرس باید IPv6 داشته باشد');
     assert.ok(String(createdData.user.config.yx || '').includes('ProxyIP-'), 'ترکیب آدرس باید ProxyIP داشته باشد');
@@ -422,7 +422,7 @@ async function runTests() {
     assert.strictEqual(subRawResp.status, 200);
     const rawLinksText = await subRawResp.text();
     const rawLines = rawLinksText.trim().split('\n').filter(Boolean);
-    assert.ok(rawLines.length >= 100, `تعداد نودهای تولیدشده باید حداقل ۱۰۰ نود باشد ولی ${rawLines.length} بود`);
+    assert.ok(rawLines.length > 0, `تعداد نودهای تولیدشده باید متناسب با آدرس/پورت/پروتکل بیشتر از صفر باشد ولی ${rawLines.length} بود`);
     const rawPorts = new Set(rawLines.map(line => new URL(line).port));
     assert.ok(rawPorts.size >= 6, `باید حداقل ۳ پورت TLS و ۳ پورت HTTP در نودها باشد ولی ${[...rawPorts].join(',')} بود`);
 
@@ -444,7 +444,7 @@ async function runTests() {
         assert.strictEqual(frag, '', 'پریست pages-iran باید بدون فرگمنت باشد؛ فقط یک دکمه فرگمنت دارد');
       }
     }
-    console.log('  ✓ تست ۴ (تولید ۱۰۰+ نود روی دامنهٔ مسدود *.pages.dev با آی‌پی تمیز، Mixed-Case SNI، ۳+۳ پورت و بدون فرگمنت): موفق');
+    console.log('  ✓ تست ۴ (تولید نود خودکار متناسب با آدرس/پورت/پروتکل روی دامنهٔ مسدود *.pages.dev با آی‌پی تمیز، Mixed-Case SNI و بدون فرگمنت): موفق');
 
     // تست ۵: تست کلاینت‌های Clash و Sing-box همراه با فرگمنت و Early Data
     const clashResp = await worker.fetch(
@@ -513,7 +513,7 @@ async function runTests() {
 
     // دو کاربر نباید آدرس مشترک داشته باشند و فقط پریست iran-fast باید فرگمنت بسازد.
     const user4 = check5Data.users.find(u => u.username === 'user-4');
-    assert.ok(user4 && Number(user4.subNodeCount) >= 100, 'کاربر با پریست پیش‌فرض باید حداقل ۱۰۰ نود داشته باشد');
+    assert.ok(user4 && Number(user4.subNodeCount) === 0, 'کاربر با پریست پیش‌فرض باید در حالت خودکار باشد');
     const user4Raw = await (await worker.fetch(
       new Request(`https://mili.pages.dev/sub/${user4.uuid}?target=raw`),
       d1Env, {}
@@ -527,7 +527,7 @@ async function runTests() {
     const sharedHosts = [...new Set(user4Lines.map(line => new URL(line).hostname))].filter(host => rezaHosts.has(host));
     assert.strictEqual(sharedHosts.length, 0, `دو کاربر نباید آی‌پی مشترک داشته باشند: ${sharedHosts.slice(0, 5).join(',')}`);
     assert.ok(user4Lines.some(line => (new URL(line).searchParams.get('fragment') || '').length > 0), 'پریست iran-fast باید فرگمنت داشته باشد');
-    assert.ok(user4Lines.length >= 100, `کاربر دوم نیز باید ۱۰۰+ نود داشته باشد ولی ${user4Lines.length} بود`);
+    assert.ok(user4Lines.length > 0, `کاربر دوم نیز باید نود خودکار تولید کند ولی ${user4Lines.length} بود`);
 
     // ویرایش تعداد نود باید بلافاصله روی همان ساب‌لینک اثر بگذارد (بدون کش قدیمی).
     const editCountResp = await worker.fetch(

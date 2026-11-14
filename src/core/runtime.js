@@ -4,6 +4,7 @@
 // ============================================================================
 
 import { connect as cfConnect } from 'cloudflare:sockets';
+import { PROXYIP_FALLBACKS, resolveProxyIpValue } from '../config/defaults.js';
 import { isPrivateOrReservedTarget, isValidUuid, parseAddressAndPort, sha224Hex, sharedDecoder, timingSafeEqualStr } from './utils.js';
 import { getXhttpPaddingMeta, selectFallbackProxyAddress } from '../subscription/generator.js';
 import { recordUserActivity } from '../db/d1.js';
@@ -25,6 +26,22 @@ const UPLOAD_PACKET_SIZE = 16 * 1024;
 const UPLOAD_QUEUE_LIMIT = 4 * 1024 * 1024;
 const CONNECT_RACE_COUNT = 2;
 const FIRST_BYTE_TIMEOUT = 3500;
+
+// زنجیرهٔ fallback: مقصد اول، سپس Oracle و BPB. این فهرست فقط وقتی استفاده
+// می‌شود که مسیر نود proxyip داشته باشد؛ مسیر مستقیم/آدرس‌های دستی دست نمی‌خورند.
+function proxyIpFallbackChain(primary = '') {
+  const list = [];
+  const seen = new Set();
+  for (const value of [primary, ...PROXYIP_FALLBACKS]) {
+    const text = String(value || '').trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push(text);
+  }
+  return list;
+}
 
 // کش هش SHA-224 رمزهای Trojan در حافظه ایزوله برای کاهش مصرف CPU به نزدیک صفر و جلوگیری از Error 1101
 const TROJAN_HASH_CACHE = new Map();
@@ -826,10 +843,14 @@ async function establishOutboundAndPipe(
   remoteState,
   effectiveCfg,
   fetcher = null,
-  onBytesTransferred = null
+  onBytesTransferred = null,
+  requestColo = ''
 ) {
-  const fallbackAddr = (effectiveCfg.p || '').trim();
-  const workerRegion = (effectiveCfg.wk || 'CF').trim().toUpperCase();
+  const fallbackAddr = String(effectiveCfg.p || '').trim()
+    ? resolveProxyIpValue(effectiveCfg.p, requestColo)
+    : '';
+  const fallbackCandidates = proxyIpFallbackChain(fallbackAddr);
+  const workerRegion = String(effectiveCfg.placementColo || effectiveCfg.wk || 'CF').trim().toUpperCase();
   const enableRegionMatch = (effectiveCfg.rm || '').toLowerCase() !== 'no';
   const qjMode = (effectiveCfg.qj || '').toLowerCase();
   const downgradeEnabled = qjMode === 'no';
@@ -874,6 +895,30 @@ async function establishOutboundAndPipe(
     try { writer?.releaseLock(); } catch (_e) {}
     remoteState.socket = null;
     remoteState.writer = null;
+  }
+
+  async function connectFallbackRoute(useProxy = false) {
+    if (fallbackCandidates.length) {
+      for (const candidate of fallbackCandidates) {
+        try {
+          const parsed = parseAddressAndPort(candidate);
+          if (!parsed?.address) continue;
+          const { remoteSock, writer } = await connectAndSend(parsed.address, parsed.port || 443, useProxy);
+          bindRemote(remoteSock, writer, null);
+          return true;
+        } catch (_e) {}
+      }
+      return false;
+    }
+    const fb = await selectFallbackProxyAddress(workerRegion, enableRegionMatch);
+    if (!fb) return false;
+    try {
+      const { remoteSock, writer } = await connectAndSend(fb.domain, fb.port || port, useProxy);
+      bindRemote(remoteSock, writer, null);
+      return true;
+    } catch (_e) {
+      return false;
+    }
   }
 
   function bindRemote(sock, writer, retryCb) {
@@ -921,44 +966,37 @@ async function establishOutboundAndPipe(
         bindRemote(remoteSock, writer, null);
         return;
       } catch (_proxyErr) {
-        let fbHost, fbPort;
-        if (fallbackAddr) {
-          const parsed = parseAddressAndPort(fallbackAddr);
-          fbHost = parsed.address;
-          fbPort = parsed.port || port;
-        } else {
-          const fb = await selectFallbackProxyAddress(workerRegion, enableRegionMatch);
-          fbHost = fb ? fb.domain : host;
-          fbPort = fb ? fb.port : port;
-        }
-        try {
-          const { remoteSock, writer } = await connectAndSend(fbHost, fbPort, false);
-          bindRemote(remoteSock, writer, null);
-        } catch (_fbErr) {
-          closeSocketSafe(ws);
-        }
+        if (!(await connectFallbackRoute(proxyEnabled))) closeSocketSafe(ws);
       }
     } else {
-      let fbHost, fbPort;
-      if (fallbackAddr) {
-        const parsed = parseAddressAndPort(fallbackAddr);
-        fbHost = parsed.address;
-        fbPort = parsed.port || port;
-      } else {
-        const fb = await selectFallbackProxyAddress(workerRegion, enableRegionMatch);
-        fbHost = fb ? fb.domain : host;
-        fbPort = fb ? fb.port : port;
-      }
-      try {
-        const { remoteSock, writer } = await connectAndSend(fbHost, fbPort, proxyEnabled);
-        bindRemote(remoteSock, writer, null);
-      } catch (_fbErr) {
-        closeSocketSafe(ws);
-      }
+      if (!(await connectFallbackRoute(proxyEnabled))) closeSocketSafe(ws);
     }
   }
 
+  // وقتی مسیر نود صریحاً ProxyIP دارد و بستهٔ کلاینت TLS است، ابتدا همان
+  // مقصد را امتحان می‌کنیم؛ اگر جواب نداد، زنجیرهٔ Oracle/BPB و سپس مستقیم.
+  const preferProxyIp = Boolean(
+    fallbackCandidates.length &&
+    !proxyEnabled &&
+    hasTlsClientHello(firstPacket)
+  );
   try {
+    if (preferProxyIp) {
+      // ابتدا تمام زنجیرهٔ ProxyIP (مقصد نود، Oracle، BPB) امتحان می‌شود؛
+      // مسیر مستقیم فقط بعد از شکست همهٔ آن‌ها و به‌عنوان آخرین راه است.
+      for (const candidate of fallbackCandidates) {
+        try {
+          const parsed = parseAddressAndPort(candidate);
+          if (!parsed?.address) continue;
+          const { remoteSock, writer } = await connectAndSend(parsed.address, parsed.port || 443, false);
+          bindRemote(remoteSock, writer, () => {
+            detachIfCurrent(remoteSock, writer);
+            retryConnect('close');
+          });
+          return;
+        } catch (_proxyFirstErr) {}
+      }
+    }
     const firstHopProxy = proxyOnly && proxyEnabled ? true : downgradeEnabled ? false : proxyEnabled;
     const { remoteSock, writer } = await connectAndSend(host, port, firstHopProxy);
     bindRemote(remoteSock, writer, () => {
@@ -972,11 +1010,18 @@ async function establishOutboundAndPipe(
 
 export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, adminUuid) {
   const reqUrl = new URL(request.url);
-  const queryP = reqUrl.searchParams.get('p') || '';
+  const requestColo = String(request.cf?.colo || '').toUpperCase();
+  const rawQueryProxy = reqUrl.searchParams.get('proxyip')
+    || reqUrl.searchParams.get('proxy_ip')
+    || reqUrl.searchParams.get('p')
+    || '';
+  const queryP = rawQueryProxy ? resolveProxyIpValue(rawQueryProxy, requestColo) : '';
   const queryWk = (reqUrl.searchParams.get('wk') || '').toUpperCase();
   const queryRm = reqUrl.searchParams.get('rm') || '';
   const queryS = reqUrl.searchParams.get('s') || '';
   const queryCc = reqUrl.searchParams.get('cc') || '';
+  const queryPlRaw = String(reqUrl.searchParams.get('pl') || '').trim().toUpperCase();
+  const queryPl = /^[A-Z]{3}$/.test(queryPlRaw) ? queryPlRaw : '';
   // نود کشوری (cc + s): اگر پروکسی از کار بیفتد هرگز بی‌صدا به مسیر مستقیم
   // کلادفلر سقوط نمی‌کند (رنگ خروجی به کشور دیگری نمی‌پرد)، فقط اتصال بسته می‌شود.
   const countryProxyLock = Boolean(queryS && /^[A-Za-z]{2}$/.test(queryCc));
@@ -1200,6 +1245,7 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                 ...(queryWk ? { wk: queryWk } : {}),
                 ...(queryRm ? { rm: queryRm } : {}),
                 ...(queryS ? { s: queryS } : {}),
+                ...(queryPl ? { placementColo: queryPl } : {}),
                 ...(countryProxyLock ? { qj: 'only' } : {})
               };
               if (vlessRes.isUDP) {
@@ -1219,7 +1265,8 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                 remoteState,
                 userCfg,
                 fetcher,
-                addTransferredBytes
+                addTransferredBytes,
+                requestColo
               );
               return;
             }
@@ -1239,6 +1286,7 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                 ...(queryWk ? { wk: queryWk } : {}),
                 ...(queryRm ? { rm: queryRm } : {}),
                 ...(queryS ? { s: queryS } : {}),
+                ...(queryPl ? { placementColo: queryPl } : {}),
                 ...(countryProxyLock ? { qj: 'only' } : {})
               };
               await establishOutboundAndPipe(
@@ -1251,7 +1299,8 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                 remoteState,
                 userCfg,
                 fetcher,
-                addTransferredBytes
+                addTransferredBytes,
+                requestColo
               );
               return;
             }
@@ -1273,6 +1322,7 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                 ...(queryWk ? { wk: queryWk } : {}),
                 ...(queryRm ? { rm: queryRm } : {}),
                 ...(queryS ? { s: queryS } : {}),
+                ...(queryPl ? { placementColo: queryPl } : {}),
                 ...(countryProxyLock ? { qj: 'only' } : {})
               };
               await establishOutboundAndPipe(
@@ -1285,7 +1335,8 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                 remoteState,
                 userCfg,
                 fetcher,
-                addTransferredBytes
+                addTransferredBytes,
+                requestColo
               );
               return;
             }
@@ -1318,6 +1369,7 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                     ...(queryWk ? { wk: queryWk } : {}),
                     ...(queryRm ? { rm: queryRm } : {}),
                     ...(queryS ? { s: queryS } : {}),
+                    ...(queryPl ? { placementColo: queryPl } : {}),
                     ...(countryProxyLock ? { qj: 'only' } : {})
                   };
                   await establishOutboundAndPipe(
@@ -1330,7 +1382,8 @@ export async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUs
                     remoteState,
                     userCfg,
                     fetcher,
-                    addTransferredBytes
+                    addTransferredBytes,
+                    requestColo
                   );
                   return;
                 }
@@ -1513,17 +1566,54 @@ export async function handleXhttpPostRequest(request, env, ctx, globalCfg, allUs
     return new Response('Bad Request', { status: 400 });
   }
 
-  let remoteSocket = null;
-  try {
-    remoteSocket = await connectRacedSocket(parsedHeader.hostname, parsedHeader.port, request.fetcher, CONNECT_RACE_COUNT);
-  } catch (_e) {
-    const fb = await selectFallbackProxyAddress(globalCfg.wk || 'CF', true);
-    if (!fb) return new Response('Gateway Timeout', { status: 504 });
+  const requestColo = String(request.cf?.colo || '').toUpperCase();
+  const requestUrl = new URL(request.url);
+  const rawProxy = requestUrl.searchParams.get('proxyip')
+    || requestUrl.searchParams.get('proxy_ip')
+    || requestUrl.searchParams.get('p')
+    || '';
+  const queryPlRaw = String(requestUrl.searchParams.get('pl') || '').trim().toUpperCase();
+  const queryPl = /^[A-Z]{3}$/.test(queryPlRaw) ? queryPlRaw : '';
+  const userCfg = { ...globalCfg, ...(matchedUser?.config || {}), ...(queryPl ? { placementColo: queryPl } : {}) };
+  const primaryProxy = resolveProxyIpValue(rawProxy || userCfg.p || '', requestColo);
+  const proxyCandidates = proxyIpFallbackChain(rawProxy || userCfg.p ? primaryProxy : '');
+  const tryConnect = async (host, port) => {
     try {
-      remoteSocket = await connectRacedSocket(fb.domain, fb.port || parsedHeader.port, request.fetcher, 1);
-    } catch (_e2) {
-      return new Response('Bad Gateway', { status: 502 });
+      return await connectRacedSocket(host, port, request.fetcher, 1);
+    } catch (_e) {
+      return null;
     }
+  };
+
+  let remoteSocket = null;
+  // xHTTP هم مثل WebSocket پارامتر proxyip را از Query String می‌خواند؛
+  // اگر بستهٔ اول TLS باشد، مسیر ProxyIP اولویت دارد.
+  const preferProxy = proxyCandidates.length > 0 && hasTlsClientHello(parsedHeader.data);
+  if (preferProxy) {
+    for (const candidate of proxyCandidates) {
+      const parsed = parseAddressAndPort(candidate);
+      if (!parsed?.address) continue;
+      remoteSocket = await tryConnect(parsed.address, parsed.port || 443);
+      if (remoteSocket) break;
+    }
+  }
+  if (!remoteSocket) {
+    remoteSocket = await tryConnect(parsedHeader.hostname, parsedHeader.port);
+  }
+  if (!remoteSocket && proxyCandidates.length) {
+    for (const candidate of proxyCandidates) {
+      const parsed = parseAddressAndPort(candidate);
+      if (!parsed?.address) continue;
+      remoteSocket = await tryConnect(parsed.address, parsed.port || 443);
+      if (remoteSocket) break;
+    }
+  }
+  if (!remoteSocket) {
+    const fb = await selectFallbackProxyAddress(userCfg.placementColo || userCfg.wk || 'CF', true);
+    if (fb) remoteSocket = await tryConnect(fb.domain, fb.port || parsedHeader.port);
+  }
+  if (!remoteSocket) {
+    return new Response('Bad Gateway', { status: 502 });
   }
 
   if (matchedUser?.id) {

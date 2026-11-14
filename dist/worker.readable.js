@@ -1435,6 +1435,16 @@ const CONFIG_DEFAULTS = {
   // تا سرویس‌هایی که آی‌پی ایران را مسدود می‌کنند باز شوند.
   sb: 'yes',
   sbRegion: 'DE', // منطقهٔ آدرس واسط پیشنهادی (DE/NL/US/…)
+  // — Placement کلودفلر: auto | multi_placement | manual_placement:<COLO>
+  // مقدار ترکیبی برای یک دراپ‌داون نگه داشته می‌شود تا هر سه حالت در یک انتخاب باشد.
+  placement: 'auto',
+  placementMode: 'auto',
+  placementColo: '',
+  placementTargets: '',
+  // — مسیر تحریم‌شکن: sync_placement | multi_cmliu | manual_proxyip
+  proxyMode: 'sync_placement',
+  proxyRegion: 'DE',
+  proxyMultiRegions: 'DE,NL,UK,FR,FI,PL,TR,IAD,LAX,CA,AE,SG,JP,KR,HK,Oracle,DigitalOcean,Vultr,BPB',
   // — گزینه‌های کلاینت که در کانفیگ‌های تولیدشده اعمال می‌شوند
   doh: 'yes', // DNS over HTTPS در کانفیگ کلاینت
   tcp: 'yes', // TCP fast-open / tcp-concurrent در کانفیگ کلاینت
@@ -1803,6 +1813,141 @@ const GLOBAL_PROXY_SOURCES = {
 };
 
 
+// ----------------------------------------------------------------------------
+// Placement کلودفلر و مقاصد ProxyIP خانوادهٔ CMLiussss
+// ----------------------------------------------------------------------------
+// هر منطقهٔ Placement، کد Colo، کشور نمایشی و شناسه‌های استاندارد ابری را دارد.
+// این فهرست هم برای دراپ‌داون مودال و هم برای نام‌گذاری/مسیر نودها استفاده می‌شود.
+const PLACEMENT_REGIONS = [
+  { colo: 'FRA', country: 'DE', flag: '🇩🇪', name: 'آلمان - فرانکفورت', targets: ['aws:eu-central-1', 'azure:germanywestcentral', 'gcp:europe-west3'] },
+  { colo: 'AMS', country: 'NL', flag: '🇳🇱', name: 'هلند - آمستردام', targets: ['azure:westeurope', 'gcp:europe-west4'] },
+  { colo: 'LHR', country: 'GB', flag: '🇬🇧', name: 'انگلیس - لندن', targets: ['aws:eu-west-2', 'azure:uksouth'] },
+  { colo: 'CDG', country: 'FR', flag: '🇫🇷', name: 'فرانسه - پاریس', targets: ['aws:eu-west-3', 'azure:francecentral'] },
+  { colo: 'HEL', country: 'FI', flag: '🇫🇮', name: 'فنلاند - هلسینکی', targets: ['gcp:europe-north1'] },
+  { colo: 'ARN', country: 'SE', flag: '🇸🇪', name: 'سوئد - استکهلم', targets: ['aws:eu-north-1', 'azure:swedencentral'] },
+  { colo: 'WAW', country: 'PL', flag: '🇵🇱', name: 'لهستان - ورشو', targets: ['azure:polandcentral', 'gcp:europe-central2'] },
+  { colo: 'ZRH', country: 'CH', flag: '🇨🇭', name: 'سوئیس - زوریخ', targets: ['aws:eu-central-2', 'azure:switzerlandnorth'] },
+  { colo: 'DXB', country: 'AE', flag: '🇦🇪', name: 'امارات - دبی', targets: ['aws:me-central-1', 'azure:uaenorth'] },
+  { colo: 'IAD', country: 'US', flag: '🇺🇸', name: 'آمریکا شرق - ویرجینیا', targets: ['aws:us-east-1', 'azure:eastus', 'gcp:us-east4'] },
+  { colo: 'SJC', country: 'US', flag: '🇺🇸', name: 'آمریکا غرب - کالیفرنیا', targets: ['aws:us-west-1', 'azure:westus'] },
+  { colo: 'SIN', country: 'SG', flag: '🇸🇬', name: 'سنگاپور', targets: ['aws:ap-southeast-1', 'azure:southeastasia'] },
+  { colo: 'NRT', country: 'JP', flag: '🇯🇵', name: 'ژاپن - توکیو', targets: ['aws:ap-northeast-1', 'azure:japaneast'] },
+  { colo: 'ICN', country: 'KR', flag: '🇰🇷', name: 'کره جنوبی - سئول', targets: ['aws:ap-northeast-2', 'azure:koreacentral'] }
+];
+
+const MULTI_PLACEMENT_COLOS = PLACEMENT_REGIONS.map(item => item.colo);
+
+const PROXYIP_REGIONS = [
+  { code: 'DE', country: 'DE', flag: '🇩🇪', name: 'آلمان', host: 'ProxyIP.DE.CMLiussss.net' },
+  { code: 'NL', country: 'NL', flag: '🇳🇱', name: 'هلند', host: 'ProxyIP.NL.CMLiussss.net' },
+  { code: 'UK', country: 'GB', flag: '🇬🇧', name: 'بریتانیا', host: 'ProxyIP.UK.CMLiussss.net' },
+  { code: 'FR', country: 'FR', flag: '🇫🇷', name: 'فرانسه', host: 'ProxyIP.FR.CMLiussss.net' },
+  { code: 'FI', country: 'FI', flag: '🇫🇮', name: 'فنلاند', host: 'ProxyIP.FI.CMLiussss.net' },
+  { code: 'PL', country: 'PL', flag: '🇵🇱', name: 'لهستان', host: 'ProxyIP.PL.CMLiussss.net' },
+  { code: 'TR', country: 'TR', flag: '🇹🇷', name: 'ترکیه', host: 'ProxyIP.TR.CMLiussss.net' },
+  { code: 'IAD', country: 'US', flag: '🇺🇸', name: 'ایالات متحده شرق', host: 'ProxyIP.IAD.CMLiussss.net' },
+  { code: 'LAX', country: 'US', flag: '🇺🇸', name: 'ایالات متحده غرب', host: 'ProxyIP.LAX.CMLiussss.net' },
+  { code: 'CA', country: 'CA', flag: '🇨🇦', name: 'کانادا', host: 'ProxyIP.CA.CMLiussss.net' },
+  { code: 'AE', country: 'AE', flag: '🇦🇪', name: 'امارات', host: 'ProxyIP.AE.CMLiussss.net' },
+  { code: 'SG', country: 'SG', flag: '🇸🇬', name: 'سنگاپور', host: 'ProxyIP.SG.CMLiussss.net' },
+  { code: 'JP', country: 'JP', flag: '🇯🇵', name: 'ژاپن', host: 'ProxyIP.JP.CMLiussss.net' },
+  { code: 'KR', country: 'KR', flag: '🇰🇷', name: 'کره جنوبی', host: 'ProxyIP.KR.CMLiussss.net' },
+  { code: 'HK', country: 'HK', flag: '🇭🇰', name: 'هنگ‌کنگ', host: 'ProxyIP.HK.CMLiussss.net' },
+  { code: 'Oracle', country: '', flag: '☁️', name: 'دیتاسنتر اوراکل', host: 'ProxyIP.Oracle.CMLiussss.net' },
+  { code: 'DigitalOcean', country: '', flag: '🌊', name: 'دیجیتال‌اوشن', host: 'ProxyIP.DigitalOcean.CMLiussss.net' },
+  { code: 'Vultr', country: '', flag: '🦅', name: 'ولتر کلود', host: 'ProxyIP.Vultr.CMLiussss.net' },
+  { code: 'BPB', country: '', flag: '🛡️', name: 'سرور پرسرعت BPB', host: 'bpb.yousef.isegaro.com' }
+];
+
+const DEFAULT_PROXYIP_REGION = 'DE';
+const PROXYIP_FALLBACKS = [
+  'ProxyIP.Oracle.CMLiussss.net:443',
+  'bpb.yousef.isegaro.com:443'
+];
+
+const PLACEMENT_BY_COLO = new Map(PLACEMENT_REGIONS.map(item => [item.colo, item]));
+const PROXYIP_BY_CODE = new Map(PROXYIP_REGIONS.map(item => [item.code.toLowerCase(), item]));
+const PLACEMENT_BY_COUNTRY = new Map(PLACEMENT_REGIONS.map(item => [item.country, item]));
+
+function getPlacementRegion(value = '') {
+  return PLACEMENT_BY_COLO.get(String(value || '').trim().toUpperCase()) || null;
+}
+
+function getProxyIpRegion(value = '') {
+  return PROXYIP_BY_CODE.get(String(value || '').trim().toLowerCase()) || null;
+}
+
+function placementForCountry(country = '') {
+  return PLACEMENT_BY_COUNTRY.get(String(country || '').trim().toUpperCase()) || null;
+}
+
+// مقدار یکتای دراپ‌داون اول را به mode/colo/targets تجزیه می‌کند.
+// ورودی‌های قدیمی مثل «DE» یا «FRA» هم به حالت دستی نگاشت می‌شوند.
+function normalizePlacementValue(value = '', fallbackColo = '') {
+  const raw = String(value || '').trim();
+  if (!raw || /^auto$/i.test(raw) || /^cf$/i.test(raw)) {
+    return { mode: 'auto', colo: '', region: null, value: 'auto' };
+  }
+  if (/^(multi|multi_placement|multiple)$/i.test(raw)) {
+    return { mode: 'multi_placement', colo: '', region: null, value: 'multi_placement' };
+  }
+  let candidate = raw;
+  const manual = raw.match(/^manual_placement(?::(.+))?$/i);
+  if (manual) candidate = manual[1] || fallbackColo || '';
+  const byCountry = placementForCountry(candidate);
+  const region = getPlacementRegion(candidate) || byCountry;
+  if (region) {
+    return {
+      mode: 'manual_placement',
+      colo: region.colo,
+      region,
+      value: `manual_placement:${region.colo}`
+    };
+  }
+  return { mode: 'auto', colo: '', region: null, value: 'auto' };
+}
+
+function normalizeProxyMode(value = '') {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'multi' || raw === 'multi_cmliu' || raw === 'multi_proxyip') return 'multi_cmliu';
+  if (raw === 'manual' || raw === 'manual_proxyip' || raw === 'single') return 'manual_proxyip';
+  return 'sync_placement';
+}
+
+function normalizeProxyRegion(value = '') {
+  return getProxyIpRegion(value)?.code || DEFAULT_PROXYIP_REGION;
+}
+
+function normalizeProxyMultiRegions(value = '') {
+  const list = String(value || '').split(',').map(part => part.trim()).filter(Boolean);
+  const out = [];
+  const seen = new Set();
+  for (const part of list) {
+    const item = getProxyIpRegion(part);
+    if (!item || seen.has(item.code)) continue;
+    seen.add(item.code);
+    out.push(item.code);
+  }
+  return out.length ? out.join(',') : CONFIG_DEFAULTS.proxyMultiRegions;
+}
+
+function proxyIpHostForCode(code = '') {
+  const item = getProxyIpRegion(code);
+  return item ? `${item.host}:443` : '';
+}
+
+// پاسخ به proxyip=auto: Colo همان درخواست را می‌گیرد؛ اگر در محیط تست
+// request.cf نبود، FRA به‌عنوان پیش‌فرض امن استفاده می‌شود.
+function resolveProxyIpValue(value = '', colo = '') {
+  const raw = String(value || '').trim();
+  const first = raw.split(',')[0].trim();
+  if (!first || /^auto$/i.test(first)) {
+    const cleanColo = String(colo || '').trim().toUpperCase();
+    return `ProxyIP.${/^[A-Z]{3}$/.test(cleanColo) ? cleanColo : 'FRA'}.CMLiussss.net:443`;
+  }
+  return first;
+}
+
 const REGION_MAP = {
   CF: ['🌐 مستقیم رسمی CF', 'CF', 'Cloudflare Direct'],
   HK: ['🇭🇰 هنگ‌کنگ', 'HK', 'Hong Kong'],
@@ -1949,6 +2094,23 @@ function normalizeEffectiveConfig(rawConfig = {}) {
   const parsedCount = parseInt(snap.subNodeCount, 10);
   // ۰ = بدون سقف (موتور خودش تعداد نودها را تعیین می‌کند)
   snap.subNodeCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
+  const rawRegion = String(rawConfig?.region || '').trim().toUpperCase();
+  const hadExplicitPlacement = rawConfig?.placement !== undefined && String(rawConfig.placement || '').trim() !== '';
+  const legacyPlacement = !hadExplicitPlacement && /^[A-Z]{2}$/.test(rawRegion) && rawRegion !== 'AUTO' && rawRegion !== 'CF'
+    ? placementForCountry(rawRegion)?.colo || ''
+    : '';
+  const placementInfo = normalizePlacementValue(
+    hadExplicitPlacement ? rawConfig.placement : legacyPlacement,
+    rawConfig?.placementColo || ''
+  );
+  snap.placement = placementInfo.value;
+  snap.placementMode = placementInfo.mode;
+  snap.placementColo = placementInfo.colo;
+  snap.placementTargets = placementInfo.mode === 'manual_placement'
+    ? placementInfo.region.targets.join(',')
+    : placementInfo.mode === 'multi_placement'
+      ? MULTI_PLACEMENT_COLOS.join(',')
+      : '';
   snap.region = String(snap.region || 'auto').trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(snap.region)) snap.region = 'auto';
   // چرخش آی‌پی: «off» یا ۰ یعنی خاموش (پیش‌فرض)؛ عدد = دقیقه
@@ -1967,6 +2129,16 @@ function normalizeEffectiveConfig(rawConfig = {}) {
   if (!snap.fragmentPackets) snap.fragmentPackets = 'tlshello';
   snap.sbRegion = String(snap.sbRegion || 'DE').trim().toUpperCase();
   if (!snap.sbRegion) snap.sbRegion = 'DE';
+  // مهاجرت نرم: تنظیمات قدیمی که فقط region/sbRegion داشتند، همان کشور خروجی
+  // را به‌عنوان حالت دستی تحریم‌شکن نگه می‌دارند.
+  const hadExplicitProxyMode = rawConfig?.proxyMode !== undefined && String(rawConfig.proxyMode || '').trim() !== '';
+  // مهاجرت نرم: اگر نسخهٔ قدیمی p دستی داشت، همان مقدار نباید با حالت خودکار نادیده گرفته شود.
+  const legacyProxyMode = !hadExplicitProxyMode && (
+    String(rawConfig?.p || '').trim() || (rawRegion && rawRegion !== 'AUTO' && rawRegion !== 'CF')
+  ) ? 'manual_proxyip' : 'sync_placement';
+  snap.proxyMode = normalizeProxyMode(hadExplicitProxyMode ? rawConfig.proxyMode : legacyProxyMode);
+  snap.proxyRegion = normalizeProxyRegion(rawConfig?.proxyRegion || (legacyProxyMode === 'manual_proxyip' ? rawRegion : snap.sbRegion));
+  snap.proxyMultiRegions = normalizeProxyMultiRegions(rawConfig?.proxyMultiRegions || CONFIG_DEFAULTS.proxyMultiRegions);
   snap.ipMode = String(snap.ipMode || '').toLowerCase() === 'fixed' ? 'fixed' : 'country';
   snap.ipPinned = String(snap.ipPinned || '').trim();
   if (snap.ipMode === 'fixed') snap.ipRotation = 'off';
@@ -2175,7 +2347,7 @@ const USER_PRESETS = {
     badges: ['فرگمنت 10-30/100-200', 'SNI ضد DPI', 'آی‌پی تمیز از مخزن آلمان'],
     recommended: true,
     nodeScope: 'all',
-    subNodeCount: 100,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 3,
@@ -2203,6 +2375,8 @@ const USER_PRESETS = {
       ipv6: 'yes',
       sb: 'yes',
       sbRegion: 'DE',
+      proxyMode: 'manual_proxyip',
+      proxyRegion: 'DE',
       ipRotation: 'off',
       tcp: 'yes',
       udp: 'yes'
@@ -2215,7 +2389,7 @@ const USER_PRESETS = {
     badges: ['xHTTP + VLESS', 'ECH + DoH', 'پورت‌های متنوع TLS/HTTP'],
     recommended: false,
     nodeScope: 'all',
-    subNodeCount: 100,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 2,
@@ -2244,6 +2418,8 @@ const USER_PRESETS = {
       ipv6: 'yes',
       sb: 'yes',
       sbRegion: 'NL',
+      proxyMode: 'manual_proxyip',
+      proxyRegion: 'NL',
       ipRotation: 'off',
       tcp: 'yes',
       udp: 'yes'
@@ -2256,7 +2432,7 @@ const USER_PRESETS = {
     badges: ['VLESS + Trojan', 'بدون فرگمنت', 'خروجی ترکیه'],
     recommended: false,
     nodeScope: 'all',
-    subNodeCount: 100,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 5,
@@ -2284,6 +2460,8 @@ const USER_PRESETS = {
       ipv6: 'yes',
       sb: 'yes',
       sbRegion: 'TR',
+      proxyMode: 'manual_proxyip',
+      proxyRegion: 'TR',
       ipRotation: 'off',
       tcp: 'yes',
       udp: 'yes'
@@ -2296,7 +2474,7 @@ const USER_PRESETS = {
     badges: ['بدون فرگمنت', 'WARP MASQUE', 'خروجی مستقیم'],
     recommended: false,
     nodeScope: 'all',
-    subNodeCount: 100,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 6,
@@ -2322,6 +2500,8 @@ const USER_PRESETS = {
       ipv6: 'yes',
       sb: 'no',
       sbRegion: 'US',
+      proxyMode: 'manual_proxyip',
+      proxyRegion: 'IAD',
       ipRotation: 'off',
       warpMasque: 'yes',
       warpMasqueCount: '2',
@@ -2336,7 +2516,7 @@ const USER_PRESETS = {
     badges: ['۶ کشور از مخزن', 'VLESS + Trojan + SS', 'WARP چندلوکیشن'],
     recommended: false,
     nodeScope: 'all',
-    subNodeCount: 100,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 4,
@@ -2364,6 +2544,8 @@ const USER_PRESETS = {
       ipv6: 'yes',
       sb: 'yes',
       sbRegion: 'DE',
+      proxyMode: 'manual_proxyip',
+      proxyRegion: 'DE',
       ipRotation: '15m',
       warp: 'yes',
       warpMl: 'yes',
@@ -2379,7 +2561,7 @@ const USER_PRESETS = {
     badges: ['فقط نود سرور اصلی', 'بدون لوکیشن', 'بدون فرگمنت'],
     recommended: false,
     nodeScope: 'origin',
-    subNodeCount: 100,
+    subNodeCount: 0,
     dataLimitGb: 0,
     expireDays: 0,
     ipLimit: 50,
@@ -2404,7 +2586,7 @@ function buildUserDefaultConfig(basePanelConfig = {}, presetId = 'iran-fast', cu
     ...CONFIG_DEFAULTS,
     ...(basePanelConfig || {}),
     ...(preset.configOverrides || {}),
-    subNodeCount: 100, // تعداد کانفیگ دستی نیست؛ موتور cfnew خودش همهٔ آدرس‌ها را می‌سازد
+    subNodeCount: 0, // ۰ = خودکار؛ موتور cfnew خودش ترکیب آدرس/پورت/پروتکل را می‌سازد
     ...(customOverrides || {})
   });
 }
@@ -2768,12 +2950,21 @@ function buildNodeDisplayName(meta = {}) {
   const protoLabel = NODE_PROTO_LABELS[protoKey] || (protoKey ? protoKey.toUpperCase() : 'Node');
   const family = meta.family || addressFamilyLabel(meta.host);
   const cc = String(meta.cc || '').trim().toUpperCase();
-  const flag = countryFlag(cc);
-  const countryTag = cc ? (flag ? `${flag} ${cc}` : cc) : '🌐 CF';
-  const parts = [countryTag, protoLabel];
+  // اگر مقصد ProxyIP مشخص باشد، پرچم/کد خروج همان مقصد در نام می‌آید؛
+  // این کار باعث می‌شود کاربر تفاوت نودهای چندکشوری را ببیند.
+  const proxyCc = String(meta.proxyCc || '').trim().toUpperCase();
+  const displayCc = /^[A-Z]{2}$/.test(proxyCc) ? proxyCc : cc;
+  const flag = countryFlag(displayCc);
+  const countryTag = displayCc ? (flag ? `${flag} ${displayCc}` : displayCc) : '🌐 CF';
+  const placement = String(meta.placementColo || '').trim().toUpperCase();
+  const parts = [countryTag];
+  if (/^[A-Z]{3}$/.test(placement)) parts.push(`[Placement: ${placement}]`);
+  parts.push(protoLabel);
   if (family) parts.push(family);
   if (meta.tls === false) parts.push('HTTP');
-  if (meta.proxy) parts.push('⇄ Proxy');
+  const proxyCode = String(meta.proxyCode || '').trim();
+  if (proxyCode) parts.push(`⇄ ${proxyCode}`);
+  else if (meta.proxy) parts.push('⇄ Proxy');
   if (meta.mci) parts.push('MCI');
   // نسخهٔ AmneziaWG روی نودهای WARP: AWG2 / AWG3
   if (meta.awg) parts.push(`AWG${meta.awg}`);
@@ -2797,7 +2988,39 @@ function finalizeMiliSubscriptionLinks(entries = [], subNodeCount = 0) {
   // «پرش آی‌پی» در کلاینت دیده نمی‌شود.
   prepared.sort((a, b) => (a.base < b.base ? -1 : a.base > b.base ? 1 : a.idx - b.idx));
   const limit = parseInt(subNodeCount, 10);
-  const sliced = Number.isFinite(limit) && limit > 0 ? prepared.slice(0, limit) : prepared;
+  let selected = prepared;
+  if (Number.isFinite(limit) && limit > 0 && prepared.length > limit) {
+    // در حالت مولتی‌لوکیشن، قبل از بریدن سقف نود، از هر مقصد ProxyIP
+    // حداقل یک نود نگه می‌داریم تا هیچ کشوری از ساب حذف نشود.
+    const priority = [];
+    const taken = new Set();
+    const add = (item) => {
+      if (!taken.has(item)) {
+        taken.add(item);
+        priority.push(item);
+      }
+    };
+    const seenProxyCodes = new Set();
+    for (const item of prepared) {
+      const code = String(item.meta?.proxyCode || '');
+      if (code && !seenProxyCodes.has(code)) {
+        seenProxyCodes.add(code);
+        add(item);
+      }
+    }
+    // جدا از تنوع ProxyIP، هر Colo انتخاب‌شده هم باید در سقف نود باقی بماند.
+    const seenPlacements = new Set();
+    for (const item of prepared) {
+      const colo = String(item.meta?.placementColo || '').toUpperCase();
+      if (colo && !seenPlacements.has(colo)) {
+        seenPlacements.add(colo);
+        add(item);
+      }
+    }
+    for (const item of prepared) add(item);
+    selected = priority;
+  }
+  const sliced = Number.isFinite(limit) && limit > 0 ? selected.slice(0, limit) : selected;
   return sliced.map((item, idx) => {
     const nodeName = `${buildNodeDisplayName(item.meta)} · #${idx + 1}`;
     return `${item.base}#${encodeURIComponent(nodeName)}`;
@@ -4572,6 +4795,16 @@ const memoryStore = {
 };
 let schemaInitPromise = null;
 
+// ۰ یعنی «خودکار»؛ تعداد نهایی را موتور بر اساس پروتکل‌ها، پورت‌ها و
+// آدرس‌های موجود می‌سازد. مقادیر ۵۰/۱۰۰ فقط سقف‌های قدیمی بودند و به
+// حالت خودکار مهاجرت می‌کنند تا ساب‌های موجود هم دیگر بریده نشوند.
+function normalizeNodeLimit(value) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  if (parsed === 50 || parsed === 100) return 0;
+  return parsed;
+}
+
 function detectD1Binding(env) {
   if (!env || typeof env !== 'object') return null;
   const priorityNames = ['DB', 'D1', 'db', 'd1', 'MILICONFIG_DB', 'miliconfig_db', 'DATABASE', 'database'];
@@ -4750,7 +4983,7 @@ async function rotateAdminPath(env = {}) {
 // ستون‌های جدول users به‌تفکیک نوع — برای جدول‌هایی که با اسکیمای قدیمی‌تر
 // ساخته شده‌اند و ALTER TABLE لازم دارند.
 const USER_TABLE_COLUMNS = {
-  sub_node_count: 'INTEGER NOT NULL DEFAULT 50',
+  sub_node_count: 'INTEGER NOT NULL DEFAULT 0',
   status: "TEXT NOT NULL DEFAULT 'active'",
   enabled: 'INTEGER NOT NULL DEFAULT 1',
   data_limit_gb: 'REAL NOT NULL DEFAULT 0',
@@ -4895,7 +5128,7 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL,
       uuid TEXT NOT NULL UNIQUE,
-      sub_node_count INTEGER NOT NULL DEFAULT 50,
+      sub_node_count INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'active',
       enabled INTEGER NOT NULL DEFAULT 1,
       data_limit_gb REAL NOT NULL DEFAULT 0,
@@ -5076,11 +5309,11 @@ function mapUserRow(row) {
   } catch (_e) {
     parsedConfig = {};
   }
-  const subNodeCount = Number.isFinite(Number(row.sub_node_count ?? row.subNodeCount))
-    ? Number(row.sub_node_count ?? row.subNodeCount)
-    : Number(parsedConfig.subNodeCount ?? 50);
+  const subNodeCount = normalizeNodeLimit(row.sub_node_count ?? row.subNodeCount ?? parsedConfig.subNodeCount);
+  // عمداً CONFIG_DEFAULTS قبل از parsedConfig قرار نمی‌گیرد؛ وگرنه فیلدهای
+  // جدیدِ پیش‌فرض، تنظیمات قدیمی region/p را «صریح» جلوه می‌دهند و مهاجرت
+  // خودکار Placement/ProxyIP انجام نمی‌شود.
   const effectiveConfig = normalizeEffectiveConfig({
-    ...CONFIG_DEFAULTS,
     ...parsedConfig,
     subNodeCount
   });
@@ -5441,8 +5674,9 @@ async function createUser(env = {}, payload = {}, clientIp = '') {
   const username = rawName || id;
   const uuid = isValidUuid(payload.uuid) ? String(payload.uuid).trim().toLowerCase() : generateUuidV4();
 
-  const subNodeCountRaw = parseInt(payload.subNodeCount ?? payload.config?.subNodeCount ?? globalCfg.subNodeCount ?? 100, 10);
-  const subNodeCount = Number.isFinite(subNodeCountRaw) ? Math.max(100, subNodeCountRaw) : 100;
+  const subNodeCount = normalizeNodeLimit(
+    payload.subNodeCount ?? payload.config?.subNodeCount ?? globalCfg.subNodeCount
+  );
 
   // هر کاربر تازه، مجموعهٔ آدرس اختصاصی خودش را از مخزن می‌گیرد؛ آدرس‌های
   // کاربران قبلی حذف می‌شوند تا دو کاربر آی‌پی یکسان نداشته باشند.
@@ -5619,11 +5853,9 @@ async function updateUser(env = {}, userId, payload = {}, clientIp = '') {
   if (!existing) return null;
   const now = Date.now();
 
-  const subNodeCountRaw = parseInt(
-    payload.subNodeCount ?? payload.config?.subNodeCount ?? existing.subNodeCount ?? 100,
-    10
+  const subNodeCount = normalizeNodeLimit(
+    payload.subNodeCount ?? payload.config?.subNodeCount ?? existing.subNodeCount
   );
-  const subNodeCount = Number.isFinite(subNodeCountRaw) ? Math.max(100, subNodeCountRaw) : 100;
 
   const updatedConfig = ensureSubscriptionPortVariety(normalizeEffectiveConfig({
     ...existing.config,
@@ -6077,7 +6309,7 @@ async function importFullBackup(env = {}, payload = {}, clientIp = '') {
         continue;
       }
       const uuid = isValidUuid(u.uuid) ? String(u.uuid).trim().toLowerCase() : generateUuidV4();
-      const subNodeCount = Number(u.subNodeCount ?? 50) || 50;
+      const subNodeCount = normalizeNodeLimit(u.subNodeCount);
       const status = String(u.status || 'active');
       const enabled = u.enabled !== false;
       const dataLimitGb = Math.max(0, Number(u.dataLimitGb) || 0);
@@ -7698,6 +7930,104 @@ function buildEchParamValue(cfg = {}) {
   return `${echDomain}+${dnsVal}`;
 }
 
+// فهرست مقصدهای ProxyIP را از مقدار متنی (تک یا چندتایی) جدا می‌کند.
+function splitProxyIpList(value = '') {
+  return String(value || '')
+    .split(/[,\n;،]+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function proxyMetaFromHost(value = '') {
+  const host = String(value || '').trim();
+  if (!host || /^auto$/i.test(host)) return { code: 'AUTO', cc: '', flag: '⚡' };
+  const match = host.match(/(?:^|[.])proxyip\.([a-z0-9]+)\.cmliussss\.net/i);
+  const item = match ? getProxyIpRegion(match[1]) : null;
+  if (item) return { code: item.code, cc: item.country, flag: item.flag };
+  if (/bpb\./i.test(host)) return { code: 'BPB', cc: '', flag: '🛡️' };
+  return { code: 'CUSTOM', cc: '', flag: '🔗' };
+}
+
+function activeColo(value = '') {
+  const clean = String(value || '').trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(clean) ? clean : '';
+}
+
+// یک برنامهٔ مسیریابی برای هر ساب می‌سازد: لیست Placementها (برای Remark)
+// و لیست مقصدهای ProxyIP (برای مسیر). آدرس نود/استخر ۶۹۶ کاملاً جدا می‌ماند.
+function buildNodeRoutingPlan(cfg = {}, requestColo = '') {
+  const placement = normalizePlacementValue(cfg.placement, cfg.placementColo);
+  const colo = activeColo(requestColo);
+  let placements = [];
+  if (placement.mode === 'manual_placement') {
+    placements = [{ colo: placement.colo, country: placement.region.country, flag: placement.region.flag, auto: false }];
+  } else if (placement.mode === 'multi_placement') {
+    placements = MULTI_PLACEMENT_COLOS.map(code => {
+      const region = getPlacementRegion(code);
+      return region ? { colo: region.colo, country: region.country, flag: region.flag, auto: false } : null;
+    }).filter(Boolean);
+  } else {
+    const region = colo ? getPlacementRegion(colo) : null;
+    placements = [{ colo: '', country: region ? region.country : '', flag: region ? region.flag : '', auto: true, detectedColo: colo }];
+  }
+
+  let proxies = [];
+  if (cfg.sb === 'yes') {
+    const mode = normalizeProxyMode(cfg.proxyMode);
+    if (mode === 'sync_placement') {
+      if (placement.mode === 'auto') {
+        const region = colo ? getPlacementRegion(colo) : null;
+        proxies = [{
+          host: 'auto',
+          code: 'AUTO',
+          cc: region ? region.country : '',
+          flag: region ? region.flag : '⚡'
+        }];
+      } else {
+        proxies = placements.map(slot => ({
+          // طبق قرارداد درخواستی، حالت sync از خود کد Colo استفاده می‌کند.
+          host: `ProxyIP.${slot.colo}.CMLiussss.net:443`,
+          code: slot.country,
+          cc: slot.country,
+          flag: slot.flag
+        }));
+      }
+    } else if (mode === 'multi_cmliu') {
+      const codes = normalizeProxyMultiRegions(cfg.proxyMultiRegions).split(',');
+      proxies = codes.map(code => {
+        const item = getProxyIpRegion(code);
+        if (!item) return null;
+        return { host: proxyIpHostForCode(item.code), code: item.code, cc: item.country, flag: item.flag };
+      }).filter(Boolean);
+    } else {
+      const custom = splitProxyIpList(cfg.p);
+      if (custom.length) {
+        proxies = custom.map(value => {
+          const meta = proxyMetaFromHost(value);
+          return { host: value, code: meta.code, cc: meta.cc, flag: meta.flag };
+        });
+      } else {
+        const item = getProxyIpRegion(normalizeProxyRegion(cfg.proxyRegion || cfg.sbRegion));
+        if (item) proxies = [{ host: proxyIpHostForCode(item.code), code: item.code, cc: item.country, flag: item.flag }];
+      }
+    }
+  }
+  return { placement, placements, proxies };
+}
+
+function annotateRoutingItem(item, plan, index) {
+  const placement = plan.placements.length ? plan.placements[index % plan.placements.length] : null;
+  const proxy = (!item?.proxy && plan.proxies.length) ? plan.proxies[index % plan.proxies.length] : null;
+  return {
+    ...(item || {}),
+    placementColo: placement ? (placement.auto ? (placement.detectedColo || '') : placement.colo) : '',
+    proxyIp: proxy ? proxy.host : '',
+    proxyCode: proxy ? proxy.code : '',
+    proxyCc: proxy ? proxy.cc : '',
+    proxyFlag: proxy ? proxy.flag : ''
+  };
+}
+
 // مسیر یکتای هر نوع نود (vless/trojan/xhttp/ss) و هر کشور؛ ورکر به مسیر حساس نیست
 // و همین مسیر را در درخواست WebSocket می‌بیند، پس تفکیک مسیرها اتصال را خراب نمی‌کند.
 function buildNodePath(proto, cfg = {}, wkOverride = '', item = null) {
@@ -7714,9 +8044,11 @@ function buildNodePath(proto, cfg = {}, wkOverride = '', item = null) {
   const cc = String(item?.country || '').trim().toUpperCase();
   if (/^[A-Z]{2}$/.test(cc)) parts.push(`cc=${cc}`);
   if (item?.proxy) parts.push(`s=${encodeProxyForPath(item.proxy)}`);
-  // ProxyIP سفارشی/منطقه‌ای (cfnew: 回退地址) — ورکر با همین آدرس MTProto/سایت
-  // مقصد را باز می‌کند؛ آدرس نود همچنان آی‌پی ثابت است.
-  if (!item?.proxy && cfg.p) parts.push(`p=${encodeProxyForPath(cfg.p)}`);
+  // ProxyIP: مسیر تازه از نام proxyip استفاده می‌کند؛ ورکر برای سازگاری
+  // با لینک‌های قدیمی، p و proxy_ip را هم می‌خواند.
+  const proxyTarget = String(item?.proxyIp || (item?.proxy ? '' : cfg.p) || '').trim();
+  if (proxyTarget) parts.push(`proxyip=${encodeProxyForPath(proxyTarget)}`);
+  if (item?.placementColo) parts.push(`pl=${encodeURIComponent(item.placementColo)}`);
   return pathName + (parts.length ? '?' + parts.join('&') : '');
 }
 
@@ -7740,9 +8072,9 @@ function buildFragmentValue(cfg = {}) {
   return `${length},${interval},${packets || 'tlshello'}`;
 }
 
-// همه حالت‌های پورت یک آدرس: یک پورت TLS + یک پورت HTTP (اگر تنظیم شده باشد).
-// با همین، هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ بدون TLS دارد و اگر یکی در
-// شبکهٔ کاربر فیلتر باشد دیگری کار می‌کند.
+// همه حالت‌های پورت یک آدرس: تمام پورت‌های TLS و HTTP انتخاب‌شده.
+// بنابراین تعداد نودهای هر آدرس/پروتکل با تعداد پورت‌های انتخابی بالا می‌رود،
+// نه با یک سقف ثابت.
 function buildPortVariants(cfg = {}, item = {}, index = 0) {
   const disableNonTls = cfg.dkby === 'yes';
   // پورت آدرس‌های ترجیحی/مخزن فقط یک تزریق پیش‌فرض است؛ انتخاب کاربر در
@@ -7755,8 +8087,8 @@ function buildPortVariants(cfg = {}, item = {}, index = 0) {
   const httpPorts = disableNonTls ? [] : parseNodePorts(cfg.httpPorts || '')
     .filter(port => CF_HTTP_PORTS.includes(port));
   const out = [];
-  if (tlsPorts.length) out.push({ port: tlsPorts[Math.abs(index) % tlsPorts.length], tls: true });
-  if (httpPorts.length) out.push({ port: httpPorts[Math.abs(index) % httpPorts.length], tls: false });
+  for (const port of tlsPorts) out.push({ port, tls: true });
+  for (const port of httpPorts) out.push({ port, tls: false });
   return out.length ? out : [{ port: 443, tls: true }];
 }
 
@@ -7778,12 +8110,17 @@ function interleaveAddresses(ipNodes = [], domainNodes = []) {
 // ساخت یک ورودی نود همراه با فرادادهٔ لازم برای نام‌گذاری و توزیع مساوی
 function makeNodeEntry(link, proto, host, item = null, tls = true) {
   const cc = String(item?.country || '').trim().toUpperCase();
+  const proxyCc = String(item?.proxyCc || '').trim().toUpperCase();
   const meta = {
     proto,
     host,
     family: addressFamilyLabel(host),
     cc: /^[A-Z]{2}$/.test(cc) ? cc : '',
-    proxy: Boolean(item?.proxy),
+    proxy: Boolean(item?.proxy || item?.proxyIp),
+    proxyCc: /^[A-Z]{2}$/.test(proxyCc) ? proxyCc : '',
+    proxyCode: String(item?.proxyCode || '').trim(),
+    proxyFlag: String(item?.proxyFlag || '').trim(),
+    placementColo: String(item?.placementColo || '').trim().toUpperCase(),
     tls: tls !== false
   };
   return { link, meta };
@@ -7811,8 +8148,23 @@ function balanceComboEntries(entries = [], limit = 0) {
   for (const [key, list] of groups) {
     // ترتیب پایدار: مستقل از ترتیب رسیدن منابع، تا لینک‌ها بین دو درخواست
     // جابه‌جا نشوند (آی‌پی نود در کلاینت ثابت می‌ماند).
-    const withProxy = list.filter(item => item.meta.proxy)
+    const withProxySorted = list.filter(item => item.meta.proxy)
       .sort((a, b) => stableAddressSeed(String(a.link)) - stableAddressSeed(String(b.link)) || String(a.link).localeCompare(String(b.link)));
+    // هر مقصد ProxyIP را حداقل یک بار در ابتدای صف نگه می‌داریم؛ وگرنه
+    // سقف نود کاربر می‌تواند یک کشور را کامل از ساب حذف کند.
+    const proxyBuckets = new Map();
+    for (const item of withProxySorted) {
+      const code = String(item.meta.proxyCode || 'proxy');
+      if (!proxyBuckets.has(code)) proxyBuckets.set(code, []);
+      proxyBuckets.get(code).push(item);
+    }
+    const withProxy = [];
+    while (proxyBuckets.size) {
+      for (const [code, bucket] of proxyBuckets) {
+        if (bucket.length) withProxy.push(bucket.shift());
+        else proxyBuckets.delete(code);
+      }
+    }
     const plain = list.filter(item => !item.meta.proxy)
       .sort((a, b) => stableAddressSeed(String(a.link)) - stableAddressSeed(String(b.link)) || String(a.link).localeCompare(String(b.link)));
     const mixed = [];
@@ -8450,14 +8802,18 @@ function buildShadowsocksLinks(list, userUuid, workerHost, cfg) {
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    // شادوساکس با پلاگین v2ray فقط روی TLS معنا دارد؛ همیشه نسخهٔ TLS انتخاب می‌شود
-    const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
+    // شادوساکس با پلاگین v2ray فقط روی TLS معنا دارد؛ همهٔ پورت‌های TLS
+    // انتخاب‌شده برای این پروتکل هم ساخته می‌شوند.
+    const ssTlsPorts = buildPortVariants(cfg, item, idx).filter(variant => variant.tls);
+    const ssPorts = ssTlsPorts.length ? ssTlsPorts : [{ port: 443, tls: true }];
     const nodeName = buildNodeDisplayName({ proto: 'ss', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     const itemPath = buildNodePath('ss', cfg, '', item);
     const pluginOpts = `v2ray-plugin;mode=websocket;host=${frontHostFor(item, workerHost)};path=${itemPath};tls`;
-    links.push(
-      makeNodeEntry(`ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
-    );
+    for (const { port } of ssPorts) {
+      links.push(
+        makeNodeEntry(`ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
+      );
+    }
   }
   return links;
 }
@@ -8547,39 +8903,45 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg) {
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
+    const xhttpTlsPorts = buildPortVariants(cfg, item, idx).filter(variant => variant.tls);
+    const xhttpPorts = xhttpTlsPorts.length ? xhttpTlsPorts : [{ port: 443, tls: true }];
     const nodeName = buildNodeDisplayName({ proto: 'xhttp', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     // مسیر یکتای xHTTP + کشور + پروکسی خروجی
-    let xhttpPath = `/${shortPath}?nt=xhttp`;
+    let xhttpPath = `/${shortPath}?ed=2048&nt=xhttp`;
     const xhttpCountry = String(item.country || '').trim().toUpperCase();
     if (/^[A-Z]{2}$/.test(xhttpCountry)) xhttpPath += `&cc=${xhttpCountry}`;
     if (item.proxy) xhttpPath += `&s=${encodeProxyForPath(item.proxy)}`;
+    const xhttpProxyTarget = String(item.proxyIp || (item.proxy ? '' : cfg.p) || '').trim();
+    if (xhttpProxyTarget) xhttpPath += `&proxyip=${encodeProxyForPath(xhttpProxyTarget)}`;
+    if (item.placementColo) xhttpPath += `&pl=${encodeURIComponent(item.placementColo)}`;
     const nodeHost = frontHostFor(item, workerHost);
     const effectiveSni = getEffectiveSniForNode(nodeHost, rawHost, idx);
-    const params = new URLSearchParams({
-      encryption: 'none',
-      security: 'tls',
-      sni: effectiveSni,
-      fp: cfg.fp || 'random',
-      type: 'xhttp',
-      host: nodeHost,
-      path: xhttpPath,
-      mode: 'stream-one'
-    });
-    params.set(
-      'extra',
-      JSON.stringify({
-        xPaddingObfsMode: true,
-        xPaddingMethod: 'tokenish',
-        xPaddingPlacement: 'queryInHeader',
-        xPaddingHeader: xPadHeader,
-        xPaddingKey: xPadKey
-      })
-    );
-    if (alpn) params.set('alpn', alpn);
-    if (echValue) params.set('ech', echValue);
-    if (fragmentValue) params.set('fragment', fragmentValue);
-    links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'xhttp', rawHost, item, true));
+    for (const { port } of xhttpPorts) {
+      const params = new URLSearchParams({
+        encryption: 'none',
+        security: 'tls',
+        sni: effectiveSni,
+        fp: cfg.fp || 'random',
+        type: 'xhttp',
+        host: nodeHost,
+        path: xhttpPath,
+        mode: 'stream-one'
+      });
+      params.set(
+        'extra',
+        JSON.stringify({
+          xPaddingObfsMode: true,
+          xPaddingMethod: 'tokenish',
+          xPaddingPlacement: 'queryInHeader',
+          xPaddingHeader: xPadHeader,
+          xPaddingKey: xPadKey
+        })
+      );
+      if (alpn) params.set('alpn', alpn);
+      if (echValue) params.set('ech', echValue);
+      if (fragmentValue) params.set('fragment', fragmentValue);
+      links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'xhttp', rawHost, item, true));
+    }
   }
   return links;
 }
@@ -9907,7 +10269,7 @@ function buildNodesCacheKey(workerHost, userOrConfig, cfg, overrides = {}, epoch
   const uuid = String(userOrConfig?.uuid || overrides.uuid || 'default').toLowerCase();
   const params = [
     overrides.set || '', overrides.country || '', overrides.region || '',
-    overrides.proto || '', overrides.limit === undefined ? '' : String(overrides.limit),
+    overrides.colo || '', overrides.proto || '', overrides.limit === undefined ? '' : String(overrides.limit),
     overrides.wk || '', overrides.scope || userOrConfig?.nodeScope || 'all',
     overrides.nowarp || '',
     userOrConfig?.subNodeCount === undefined ? '' : String(userOrConfig.subNodeCount)
@@ -9962,23 +10324,9 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   // فقط نودهای دامنه‌محور می‌سازد و از استخر آی‌پی/کشوری/WARP استفاده نمی‌کند.
   const setParam = String(queryOverrides.set || '').trim().toLowerCase();
   const domainMode = setParam === 'domain';
-  // منطقهٔ انتخابی کاربر/لوکیشن (region) — در نبود ?country از همین استفاده می‌شود
-  const regionCode = String(queryOverrides.region || cfg.region || 'auto').trim().toUpperCase();
-  const regionFilter = /^[A-Z]{2}$/.test(regionCode) && regionCode !== 'AUTO' && regionCode !== 'CF'
-    ? regionCode
-    : '';
   // ساب‌لینک اختصاصی «فقط IPv6» برای شبکهٔ همراه اول: ?set=ipv6
   // (همراهاول روی IPv6 عملکرد بهتری دارد؛ این ساب هیچ نود IPv4/دامنه ندارد.)
   const ipv6Mode = setParam === 'ipv6' || setParam === 'ipv6-mci' || setParam === 'mci';
-
-  // اولویت آدرس واسط: مقدار صریح کاربر → منطقهٔ انتخابی → پیش‌فرض تحریم‌شکن
-  const explicitProxy = String(rawCfg.p || '').trim();
-  if (!explicitProxy && regionFilter) {
-    cfg.p = `ProxyIP.${regionFilter}.CMLiussss.net:443`;
-  }
-  if (!String(cfg.p || '').trim() && cfg.sb === 'yes') {
-    cfg.p = resolveSanctionsProxy(cfg, userUuid);
-  }
 
   if (ipv6Mode) {
     // فقط آی‌پی نسخه ۶؛ دامنه محور/لیست ترجیحی/سرور اصلی/چندلوکیشن کنار گذاشته می‌شوند
@@ -10044,15 +10392,33 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
     sniHosts: String(cfg.sniHosts || '').trim() ? cfg.sniHosts : globalSniHosts
   });
   let frontCursor = 0;
+  let routingCursor = 0;
+  // Placement/ProxyIP فقط مسیر و نام نودها را عوض می‌کند؛ منبع Address همچنان
+  // از همان استخر ۶۹۶ آی‌پی یا آدرس‌های دستی می‌آید و دست نمی‌خورد.
+  const routingPlan = buildNodeRoutingPlan(cfg, queryOverrides.colo || '');
 
   function appendFromSource(sourceList) {
     // فیدهای عمومی SOCKS/HTTP می‌توانند هزاران خط برگردانند؛ سقف امنیتي
     // از پرش حافظه/Stack Overflow در ساخت لینک‌ها جلوگیری می‌کند.
     const safeList = filterAddressFamily(sourceList, cfg).slice(0, 160);
     if (!Array.isArray(safeList) || safeList.length === 0) return;
-    const decorated = frontHosts.length > 1
-      ? safeList.map(item => ({ ...item, frontHost: frontHosts[(frontCursor++) % frontHosts.length] }))
-      : safeList;
+    // در حالت‌های چندلوکیشن (Placement یا ProxyIP) برای هر آدرس به تعداد
+    // منطقه‌های انتخاب‌شده نود مجزا می‌سازیم تا همهٔ کشورها/Coloها در ساب
+    // حاضر باشند. Address همان آی‌پی/دامنهٔ قبلی است و دست نمی‌خورد.
+    const fanout = Math.max(
+      routingPlan.placement.mode === 'multi_placement' ? routingPlan.placements.length : 1,
+      cfg.sb === 'yes' && normalizeProxyMode(cfg.proxyMode) === 'multi_cmliu' ? routingPlan.proxies.length : 1,
+      1
+    );
+    const decorated = [];
+    safeList.forEach(item => {
+      const withFront = frontHosts.length > 1
+        ? { ...item, frontHost: frontHosts[(frontCursor++) % frontHosts.length] }
+        : item;
+      for (let slot = 0; slot < fanout; slot++) {
+        decorated.push(annotateRoutingItem(withFront, routingPlan, routingCursor++));
+      }
+    });
     if (evEnabled) protoGroups.vless.push(...buildVlessLinks(decorated, userUuid, workerHost, cfg, wkOverride));
     if (etEnabled) protoGroups.trojan.push(...buildTrojanLinks(decorated, userUuid, workerHost, cfg, wkOverride));
     if (exEnabled) protoGroups.xhttp.push(...buildXhttpLinks(decorated, userUuid, workerHost, cfg));
@@ -10100,7 +10466,9 @@ async function generateUserNodesList(userOrConfig, workerHost, queryOverrides = 
   let countryMode = false;
   // منطقهٔ ذخیره‌شدهٔ کاربر هم باید مثل ?country عمل کند؛ قبلاً فقط برای
   // ساختن ProxyIP استفاده می‌شد و تب «منطقه» روی کشور نودها اثر کامل نداشت.
-  const countryFilter = fixedIpMode ? '' : String(queryOverrides.country || regionFilter || '').trim().toUpperCase();
+  // ?country= همچنان ساب لوکیشن صریح می‌سازد؛ Placement و منطقهٔ خروجی دیگر
+  // استخر آدرس را عوض نمی‌کنند و فقط مسیر/نام نود را کنترل می‌کنند.
+  const countryFilter = fixedIpMode ? '' : String(queryOverrides.country || '').trim().toUpperCase();
   if (!domainMode && !ipv6Mode && !fixedIpMode && countryFilter) {
     const wantedCountries = countryFilter === 'MULTI' || countryFilter === 'ALL'
       ? MULTI_COUNTRY_CODES.slice()
@@ -10462,6 +10830,7 @@ async function handleSubscriptionResponse(request, userOrConfig, url = null, env
 
   const queryOverrides = {
     wk: url.searchParams.get('wk') || '',
+    colo: String(request.cf?.colo || '').toUpperCase(),
     proto: url.searchParams.get('proto') || '',
     country: url.searchParams.get('country') || '',
     verify: url.searchParams.get('verify') || '',
@@ -12074,6 +12443,22 @@ const UPLOAD_QUEUE_LIMIT = 4 * 1024 * 1024;
 const CONNECT_RACE_COUNT = 2;
 const FIRST_BYTE_TIMEOUT = 3500;
 
+// زنجیرهٔ fallback: مقصد اول، سپس Oracle و BPB. این فهرست فقط وقتی استفاده
+// می‌شود که مسیر نود proxyip داشته باشد؛ مسیر مستقیم/آدرس‌های دستی دست نمی‌خورند.
+function proxyIpFallbackChain(primary = '') {
+  const list = [];
+  const seen = new Set();
+  for (const value of [primary, ...PROXYIP_FALLBACKS]) {
+    const text = String(value || '').trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push(text);
+  }
+  return list;
+}
+
 // کش هش SHA-224 رمزهای Trojan در حافظه ایزوله برای کاهش مصرف CPU به نزدیک صفر و جلوگیری از Error 1101
 const TROJAN_HASH_CACHE = new Map();
 async function getCachedTrojanHash(pass = '') {
@@ -12874,10 +13259,14 @@ async function establishOutboundAndPipe(
   remoteState,
   effectiveCfg,
   fetcher = null,
-  onBytesTransferred = null
+  onBytesTransferred = null,
+  requestColo = ''
 ) {
-  const fallbackAddr = (effectiveCfg.p || '').trim();
-  const workerRegion = (effectiveCfg.wk || 'CF').trim().toUpperCase();
+  const fallbackAddr = String(effectiveCfg.p || '').trim()
+    ? resolveProxyIpValue(effectiveCfg.p, requestColo)
+    : '';
+  const fallbackCandidates = proxyIpFallbackChain(fallbackAddr);
+  const workerRegion = String(effectiveCfg.placementColo || effectiveCfg.wk || 'CF').trim().toUpperCase();
   const enableRegionMatch = (effectiveCfg.rm || '').toLowerCase() !== 'no';
   const qjMode = (effectiveCfg.qj || '').toLowerCase();
   const downgradeEnabled = qjMode === 'no';
@@ -12922,6 +13311,30 @@ async function establishOutboundAndPipe(
     try { writer?.releaseLock(); } catch (_e) {}
     remoteState.socket = null;
     remoteState.writer = null;
+  }
+
+  async function connectFallbackRoute(useProxy = false) {
+    if (fallbackCandidates.length) {
+      for (const candidate of fallbackCandidates) {
+        try {
+          const parsed = parseAddressAndPort(candidate);
+          if (!parsed?.address) continue;
+          const { remoteSock, writer } = await connectAndSend(parsed.address, parsed.port || 443, useProxy);
+          bindRemote(remoteSock, writer, null);
+          return true;
+        } catch (_e) {}
+      }
+      return false;
+    }
+    const fb = await selectFallbackProxyAddress(workerRegion, enableRegionMatch);
+    if (!fb) return false;
+    try {
+      const { remoteSock, writer } = await connectAndSend(fb.domain, fb.port || port, useProxy);
+      bindRemote(remoteSock, writer, null);
+      return true;
+    } catch (_e) {
+      return false;
+    }
   }
 
   function bindRemote(sock, writer, retryCb) {
@@ -12969,44 +13382,37 @@ async function establishOutboundAndPipe(
         bindRemote(remoteSock, writer, null);
         return;
       } catch (_proxyErr) {
-        let fbHost, fbPort;
-        if (fallbackAddr) {
-          const parsed = parseAddressAndPort(fallbackAddr);
-          fbHost = parsed.address;
-          fbPort = parsed.port || port;
-        } else {
-          const fb = await selectFallbackProxyAddress(workerRegion, enableRegionMatch);
-          fbHost = fb ? fb.domain : host;
-          fbPort = fb ? fb.port : port;
-        }
-        try {
-          const { remoteSock, writer } = await connectAndSend(fbHost, fbPort, false);
-          bindRemote(remoteSock, writer, null);
-        } catch (_fbErr) {
-          closeSocketSafe(ws);
-        }
+        if (!(await connectFallbackRoute(proxyEnabled))) closeSocketSafe(ws);
       }
     } else {
-      let fbHost, fbPort;
-      if (fallbackAddr) {
-        const parsed = parseAddressAndPort(fallbackAddr);
-        fbHost = parsed.address;
-        fbPort = parsed.port || port;
-      } else {
-        const fb = await selectFallbackProxyAddress(workerRegion, enableRegionMatch);
-        fbHost = fb ? fb.domain : host;
-        fbPort = fb ? fb.port : port;
-      }
-      try {
-        const { remoteSock, writer } = await connectAndSend(fbHost, fbPort, proxyEnabled);
-        bindRemote(remoteSock, writer, null);
-      } catch (_fbErr) {
-        closeSocketSafe(ws);
-      }
+      if (!(await connectFallbackRoute(proxyEnabled))) closeSocketSafe(ws);
     }
   }
 
+  // وقتی مسیر نود صریحاً ProxyIP دارد و بستهٔ کلاینت TLS است، ابتدا همان
+  // مقصد را امتحان می‌کنیم؛ اگر جواب نداد، زنجیرهٔ Oracle/BPB و سپس مستقیم.
+  const preferProxyIp = Boolean(
+    fallbackCandidates.length &&
+    !proxyEnabled &&
+    hasTlsClientHello(firstPacket)
+  );
   try {
+    if (preferProxyIp) {
+      // ابتدا تمام زنجیرهٔ ProxyIP (مقصد نود، Oracle، BPB) امتحان می‌شود؛
+      // مسیر مستقیم فقط بعد از شکست همهٔ آن‌ها و به‌عنوان آخرین راه است.
+      for (const candidate of fallbackCandidates) {
+        try {
+          const parsed = parseAddressAndPort(candidate);
+          if (!parsed?.address) continue;
+          const { remoteSock, writer } = await connectAndSend(parsed.address, parsed.port || 443, false);
+          bindRemote(remoteSock, writer, () => {
+            detachIfCurrent(remoteSock, writer);
+            retryConnect('close');
+          });
+          return;
+        } catch (_proxyFirstErr) {}
+      }
+    }
     const firstHopProxy = proxyOnly && proxyEnabled ? true : downgradeEnabled ? false : proxyEnabled;
     const { remoteSock, writer } = await connectAndSend(host, port, firstHopProxy);
     bindRemote(remoteSock, writer, () => {
@@ -13020,11 +13426,18 @@ async function establishOutboundAndPipe(
 
 async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, adminUuid) {
   const reqUrl = new URL(request.url);
-  const queryP = reqUrl.searchParams.get('p') || '';
+  const requestColo = String(request.cf?.colo || '').toUpperCase();
+  const rawQueryProxy = reqUrl.searchParams.get('proxyip')
+    || reqUrl.searchParams.get('proxy_ip')
+    || reqUrl.searchParams.get('p')
+    || '';
+  const queryP = rawQueryProxy ? resolveProxyIpValue(rawQueryProxy, requestColo) : '';
   const queryWk = (reqUrl.searchParams.get('wk') || '').toUpperCase();
   const queryRm = reqUrl.searchParams.get('rm') || '';
   const queryS = reqUrl.searchParams.get('s') || '';
   const queryCc = reqUrl.searchParams.get('cc') || '';
+  const queryPlRaw = String(reqUrl.searchParams.get('pl') || '').trim().toUpperCase();
+  const queryPl = /^[A-Z]{3}$/.test(queryPlRaw) ? queryPlRaw : '';
   // نود کشوری (cc + s): اگر پروکسی از کار بیفتد هرگز بی‌صدا به مسیر مستقیم
   // کلادفلر سقوط نمی‌کند (رنگ خروجی به کشور دیگری نمی‌پرد)، فقط اتصال بسته می‌شود.
   const countryProxyLock = Boolean(queryS && /^[A-Za-z]{2}$/.test(queryCc));
@@ -13248,6 +13661,7 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
                 ...(queryWk ? { wk: queryWk } : {}),
                 ...(queryRm ? { rm: queryRm } : {}),
                 ...(queryS ? { s: queryS } : {}),
+                ...(queryPl ? { placementColo: queryPl } : {}),
                 ...(countryProxyLock ? { qj: 'only' } : {})
               };
               if (vlessRes.isUDP) {
@@ -13267,7 +13681,8 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
                 remoteState,
                 userCfg,
                 fetcher,
-                addTransferredBytes
+                addTransferredBytes,
+                requestColo
               );
               return;
             }
@@ -13287,6 +13702,7 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
                 ...(queryWk ? { wk: queryWk } : {}),
                 ...(queryRm ? { rm: queryRm } : {}),
                 ...(queryS ? { s: queryS } : {}),
+                ...(queryPl ? { placementColo: queryPl } : {}),
                 ...(countryProxyLock ? { qj: 'only' } : {})
               };
               await establishOutboundAndPipe(
@@ -13299,7 +13715,8 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
                 remoteState,
                 userCfg,
                 fetcher,
-                addTransferredBytes
+                addTransferredBytes,
+                requestColo
               );
               return;
             }
@@ -13321,6 +13738,7 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
                 ...(queryWk ? { wk: queryWk } : {}),
                 ...(queryRm ? { rm: queryRm } : {}),
                 ...(queryS ? { s: queryS } : {}),
+                ...(queryPl ? { placementColo: queryPl } : {}),
                 ...(countryProxyLock ? { qj: 'only' } : {})
               };
               await establishOutboundAndPipe(
@@ -13333,7 +13751,8 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
                 remoteState,
                 userCfg,
                 fetcher,
-                addTransferredBytes
+                addTransferredBytes,
+                requestColo
               );
               return;
             }
@@ -13366,6 +13785,7 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
                     ...(queryWk ? { wk: queryWk } : {}),
                     ...(queryRm ? { rm: queryRm } : {}),
                     ...(queryS ? { s: queryS } : {}),
+                    ...(queryPl ? { placementColo: queryPl } : {}),
                     ...(countryProxyLock ? { qj: 'only' } : {})
                   };
                   await establishOutboundAndPipe(
@@ -13378,7 +13798,8 @@ async function handleWebSocketUpgrade(request, env, ctx, globalCfg, allUsers, ad
                     remoteState,
                     userCfg,
                     fetcher,
-                    addTransferredBytes
+                    addTransferredBytes,
+                    requestColo
                   );
                   return;
                 }
@@ -13561,17 +13982,54 @@ async function handleXhttpPostRequest(request, env, ctx, globalCfg, allUsers, ad
     return new Response('Bad Request', { status: 400 });
   }
 
-  let remoteSocket = null;
-  try {
-    remoteSocket = await connectRacedSocket(parsedHeader.hostname, parsedHeader.port, request.fetcher, CONNECT_RACE_COUNT);
-  } catch (_e) {
-    const fb = await selectFallbackProxyAddress(globalCfg.wk || 'CF', true);
-    if (!fb) return new Response('Gateway Timeout', { status: 504 });
+  const requestColo = String(request.cf?.colo || '').toUpperCase();
+  const requestUrl = new URL(request.url);
+  const rawProxy = requestUrl.searchParams.get('proxyip')
+    || requestUrl.searchParams.get('proxy_ip')
+    || requestUrl.searchParams.get('p')
+    || '';
+  const queryPlRaw = String(requestUrl.searchParams.get('pl') || '').trim().toUpperCase();
+  const queryPl = /^[A-Z]{3}$/.test(queryPlRaw) ? queryPlRaw : '';
+  const userCfg = { ...globalCfg, ...(matchedUser?.config || {}), ...(queryPl ? { placementColo: queryPl } : {}) };
+  const primaryProxy = resolveProxyIpValue(rawProxy || userCfg.p || '', requestColo);
+  const proxyCandidates = proxyIpFallbackChain(rawProxy || userCfg.p ? primaryProxy : '');
+  const tryConnect = async (host, port) => {
     try {
-      remoteSocket = await connectRacedSocket(fb.domain, fb.port || parsedHeader.port, request.fetcher, 1);
-    } catch (_e2) {
-      return new Response('Bad Gateway', { status: 502 });
+      return await connectRacedSocket(host, port, request.fetcher, 1);
+    } catch (_e) {
+      return null;
     }
+  };
+
+  let remoteSocket = null;
+  // xHTTP هم مثل WebSocket پارامتر proxyip را از Query String می‌خواند؛
+  // اگر بستهٔ اول TLS باشد، مسیر ProxyIP اولویت دارد.
+  const preferProxy = proxyCandidates.length > 0 && hasTlsClientHello(parsedHeader.data);
+  if (preferProxy) {
+    for (const candidate of proxyCandidates) {
+      const parsed = parseAddressAndPort(candidate);
+      if (!parsed?.address) continue;
+      remoteSocket = await tryConnect(parsed.address, parsed.port || 443);
+      if (remoteSocket) break;
+    }
+  }
+  if (!remoteSocket) {
+    remoteSocket = await tryConnect(parsedHeader.hostname, parsedHeader.port);
+  }
+  if (!remoteSocket && proxyCandidates.length) {
+    for (const candidate of proxyCandidates) {
+      const parsed = parseAddressAndPort(candidate);
+      if (!parsed?.address) continue;
+      remoteSocket = await tryConnect(parsed.address, parsed.port || 443);
+      if (remoteSocket) break;
+    }
+  }
+  if (!remoteSocket) {
+    const fb = await selectFallbackProxyAddress(userCfg.placementColo || userCfg.wk || 'CF', true);
+    if (fb) remoteSocket = await tryConnect(fb.domain, fb.port || parsedHeader.port);
+  }
+  if (!remoteSocket) {
+    return new Response('Bad Gateway', { status: 502 });
   }
 
   if (matchedUser?.id) {
@@ -18141,6 +18599,8 @@ function renderAdminDashboardHtml(initialData = {}) {
       acc[code] = { name: item.name || code, flag: item.flag || '' };
       return acc;
     }, {}),
+    placementRegions: PLACEMENT_REGIONS,
+    proxyRegions: PROXYIP_REGIONS,
     vipCountries: EDGE_VIP_COUNTRIES,
     // استخر آی‌پی اختصاصی؛ برای انتخاب تصادفی در پنجرهٔ تنظیمات کاربر و ساخت ساب /ips
     ipPool: IP_POOL,
@@ -20207,6 +20667,15 @@ ${PWA_HEAD_TAGS}
   .port-mini:hover { color: var(--neon); border-color: rgba(var(--neon-rgb), 0.45); }
   .port-hint { font-size: 0.62rem; opacity: 0.5; }
   body.light-mode .port-chip { background: #ffffff; }
+  .region-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; max-height: 220px; overflow: auto; margin-top: 2px; padding: 2px; }
+  .region-chip { position: relative; display: flex; align-items: center; min-width: 0; padding: 7px 8px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer; font-size: 0.68rem; line-height: 1.5; user-select: none; }
+  .region-chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .region-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .region-chip b { color: var(--text); direction: ltr; font-size: 0.62rem; margin-inline-start: 3px; }
+  .region-chip:hover { border-color: var(--line-strong); color: var(--text); }
+  .region-chip.is-on { border-color: rgba(var(--neon-rgb), 0.5); background: rgba(var(--neon-rgb), 0.1); color: var(--neon); }
+  .region-chip.is-on b { color: var(--neon); }
+  body.light-mode .region-chip { background: #ffffff; }
   #createModal .port-chip { padding: 5px 4px; font-size: 0.64rem; }
   #createModal .port-chip small { font-size: 0.52rem; }
   @media (max-width: 720px) {
@@ -20216,6 +20685,8 @@ ${PWA_HEAD_TAGS}
     .port-chip small { font-size: 0.52rem; }
     .port-actions { gap: 5px; }
     .port-hint { width: 100%; }
+    .region-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .region-chip { padding: 6px 7px; font-size: 0.64rem; }
   }
   @media (max-width: 380px) {
     .port-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -22157,7 +22628,7 @@ ${PWA_HEAD_TAGS}
             <div class="help-card">
               <h4>${icon('gauge')} تعداد نود هر کاربر</h4>
               <ul>
-                <li>حداقل ۱۰۰ نود برای هر کاربر ساخته می‌شود و با ویرایش همین عدد قابل تغییر است.</li>
+                <li>تعداد نود به‌صورت خودکار از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت ساخته می‌شود؛ مقدار ۰ یعنی بدون سقف.</li>
                 <li>آدرس‌ها از همهٔ مخزن‌ها (IPv4، IPv6، دامنه، ProxyIP و SOCKS/HTTP) انتخاب می‌شوند.</li>
                 <li>هر کاربر آدرس‌های اختصاصی می‌گیرد؛ آدرس کاربران قبلی دوباره استفاده نمی‌شود.</li>
               </ul>
@@ -22663,6 +23134,10 @@ ${PWA_HEAD_TAGS}
       card.className = 'user-card';
       var nodeCount = Number(u.subNodeCount || 0);
       var key = userKey(u);
+      var ucfg = u.config || {};
+      var placementTag = ucfg.placementMode === 'manual_placement'
+        ? 'Placement: ' + (ucfg.placementColo || '—')
+        : ucfg.placementMode === 'multi_placement' ? 'مولتی‌لوکیشن' : 'منطقه خودکار';
       card.innerHTML = [
         '<div class="user-head">',
           '<div><div class="user-name">' + escHtml(u.username || ('کاربر ' + (idx + 1))) + '</div>',
@@ -22673,8 +23148,9 @@ ${PWA_HEAD_TAGS}
         '<div class="bar"><i style="width:' + Math.max(pct, 2) + '%"></i></div>',
         '<div class="usage"><span>' + t('card.expiry') + ' ' + fmtDate(u.expireAt) + '</span><span>' + (nodeCount ? nodeCount + ' نود' : t('card.nodesAuto')) + '</span></div>',
         '<div class="user-tags">' + activeProtocols().map(function(p) { return '<span class="tag on">' + p + '</span>'; }).join('') +
-          (u.config && u.config.sb === 'yes' ? '<span class="tag on" title="خروجی از آدرس واسط بیرون از ایران">' + ICO.sanctions + ' تحریم‌شکن</span>' : '') +
-          (u.config && u.config.awgv ? '<span class="tag" title="نسخهٔ امنزیا در نودهای WARP">' + ICO.warp + ' امنزیا ' + u.config.awgv + '</span>' : '') +
+          '<span class="tag" title="Placement کلودفلر">' + ICO.pin + ' ' + placementTag + '</span>' +
+          (ucfg.sb === 'yes' ? '<span class="tag on" title="خروجی از آدرس واسط بیرون از ایران">' + ICO.sanctions + ' تحریم‌شکن · ' + (ucfg.proxyMode === 'multi_cmliu' ? 'مولتی CMLiu' : ucfg.proxyMode === 'manual_proxyip' ? 'دستی' : 'هماهنگ') + '</span>' : '') +
+          (ucfg.awgv ? '<span class="tag" title="نسخهٔ امنزیا در نودهای WARP">' + ICO.warp + ' امنزیا ' + ucfg.awgv + '</span>' : '') +
         '</div>',
         '<div class="user-actions" style="margin-top:auto;">',
           '<button class="btn sm primary" type="button" data-act="copy" data-url="' + base + '">' + ICO.copy + ' ' + t('btn.copySub') + '</button>',
@@ -23515,14 +23991,16 @@ ${PWA_HEAD_TAGS}
       title: 'آدرس‌ها و منطقه',
       icon: 'pin',
       fields: [
-        { key: 'region', section: 'منطقه', label: 'منطقهٔ خروجی', type: 'select', def: 'auto', options: 'regions', hint: 'کشور خروجی نودها؛ «خودکار» یعنی بدون محدودیت کشور.' },
+        { key: 'placement', section: 'منطقه', label: 'منطقهٔ خروجی — Cloudflare Placement', type: 'select', def: 'auto', options: 'placementRegions', hint: 'این انتخاب فقط Placement، کد Colo و مسیر خروج را کنترل می‌کند؛ آدرس نودها همان استخر ۶۹۶ آی‌پی یا آدرس‌های دستی باقی می‌ماند. «خودکار» از request.cf.colo استفاده می‌کند.' },
         { key: 'ipMode', section: 'آی‌پی نود در کلاینت', label: 'حالت آی‌پی', type: 'select', def: 'country', options: [['country', 'کشور ثابت (آدرس‌ها از استخر تازه می‌شوند)'], ['fixed', 'آی‌پی ثابت (یک آدرس برای همهٔ نودها)']], hint: 'در حالت «آی‌پی ثابت»، با هر پینگ یا بروزرسانی ساب، آدرس و کشور خروجی نود عوض نمی‌شود؛ برای تضمین این ثبات، نودهای WARP در این حالت ساخته نمی‌شوند.' },
         { key: 'ipPinned', section: 'آی‌پی نود در کلاینت', label: 'آی‌پی ثابت دلخواه', type: 'text', def: '', ph: '104.16.0.1 یا 104.16.0.1:443 — خالی = انتخاب پایدار خودکار', hint: 'فقط در حالت «آی‌پی ثابت» استفاده می‌شود؛ خالی بماند، پنل خودش یک آدرس پایدار انتخاب می‌کند.' },
         { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 4, wide: true, def: '', pool: true, ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
         { key: 'yxURL', section: 'آدرس‌های دستی', label: 'منبع آنلاین آدرس‌ها', type: 'text', wide: true, def: '', list: 'dlYxUrl', ph: 'https://... (چند نشانی را با کاما جدا کنید)' },
         { key: 'sb', section: 'مسیر خروج', label: 'تحریم‌شکن (خروجی از آدرس واسط)', hint: 'همهٔ نودها از یک آدرس بیرون از ایران خارج می‌شوند تا سرویس‌های مسدود برای آی‌پی ایران باز شوند', type: 'switch', def: 'yes' },
-        { key: 'sbRegion', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'DE', options: 'regions' },
-        { key: 'p', section: 'مسیر خروج', label: 'آدرس واسط (ProxyIP)', type: 'text', def: '', list: 'dlProxyIp', ph: 'ProxyIP.DE.example.com:443' },
+        { key: 'proxyMode', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'sync_placement', options: [['sync_placement', '⚡ خودکار (هماهنگ با منطقهٔ Placement بالا)'], ['multi_cmliu', '🌍 مولتی‌لوکیشن (همه کشورها در ساب)'], ['manual_proxyip', '📍 تک‌کشور / دستی']], showWhenSwitch: 'sb', hint: 'در حالت خودکار، Colo همان درخواست یا Placement انتخاب‌شده به‌صورت داینامیک به ProxyIP تبدیل می‌شود.' },
+        { key: 'proxyRegion', section: 'مسیر خروج', label: 'کشور تحریم‌شکن (تک‌کشور)', type: 'select', def: 'DE', options: 'proxyRegions', showWhenSwitch: 'sb', showWhen: { key: 'proxyMode', equals: 'manual_proxyip' }, hint: 'با انتخاب کشور، کادر آدرس واسط به‌صورت خودکار پر می‌شود؛ می‌توانید بعداً آن را دستی تغییر دهید.' },
+        { key: 'proxyMultiRegions', section: 'مسیر خروج', label: 'کشورهای تحریم‌شکن (چندانتخابی)', type: 'regionMulti', wide: true, def: 'DE,NL,UK,FR,FI,PL,TR,IAD,LAX,CA,AE,SG,JP,KR,HK,Oracle,DigitalOcean,Vultr,BPB', showWhenSwitch: 'sb', showWhen: { key: 'proxyMode', equals: 'multi_cmliu' }, hint: 'برای هر کشور یک کانفیگ مجزا با ProxyIP همان کشور ساخته می‌شود.' },
+        { key: 'p', section: 'مسیر خروج', label: 'آدرس واسط (ProxyIP)', type: 'text', def: '', list: 'dlProxyIp', ph: 'ProxyIP.DE.CMLiussss.net:443', showWhenSwitch: 'sb', hint: 'در حالت دستی می‌توانید یک یا چند دامنه/آی‌پی را با کاما وارد کنید؛ در حالت خودکار خالی بگذارید.' },
         { key: 's', section: 'مسیر خروج', label: 'پروکسی خروجی', type: 'text', def: '', list: 'dlProxy', ph: 'socks5://host:1080' }
       ]
     },
@@ -23589,6 +24067,17 @@ ${PWA_HEAD_TAGS}
         pairs = [['auto', 'خودکار (بدون محدودیت منطقه)'], ['CF', 'مستقیم کلادفلر (CF)']];
         var srcs = INITIAL_DATA.countrySources || {};
         Object.keys(srcs).sort().forEach(function(code) { pairs.push([code, srcs[code].name + ' — ' + code]); });
+      }
+      else if (list === 'placementRegions') {
+        pairs = [['auto', 'خودکار (بدون محدودیت منطقه)'], ['multi_placement', '🌍 مولتی‌لوکیشن Placement']];
+        (INITIAL_DATA.placementRegions || []).forEach(function(region) {
+          pairs.push(['manual_placement:' + region.colo, region.flag + ' ' + region.name + ' — ' + region.colo]);
+        });
+      }
+      else if (list === 'proxyRegions') {
+        pairs = (INITIAL_DATA.proxyRegions || []).map(function(region) {
+          return [region.code, region.flag + ' ' + region.name + ' — ' + region.code];
+        });
       }
     } else if (Array.isArray(list)) {
       pairs = list;
@@ -23672,26 +24161,61 @@ ${PWA_HEAD_TAGS}
     '</div>';
   }
 
+  function fieldShellAttrs(field) {
+    var attrs = '';
+    if (field.showWhenSwitch) attrs += ' data-show-when="' + String(field.showWhenSwitch).replace(/"/g, '&quot;') + '"';
+    if (field.showWhen && field.showWhen.key) {
+      attrs += ' data-show-when-key="' + String(field.showWhen.key).replace(/"/g, '&quot;') + '"' +
+        ' data-show-when-value="' + String(field.showWhen.equals === undefined ? '' : field.showWhen.equals).replace(/"/g, '&quot;') + '"';
+    }
+    return attrs;
+  }
+
+  function placementTargetsHint(value) {
+    var raw = String(value || 'auto');
+    if (raw === 'auto') return '<span class="field-hint">Colo در زمان اتصال از <code>request.cf.colo</code> خوانده می‌شود.</span>';
+    if (raw === 'multi_placement') return '<span class="field-hint">همهٔ ' + (INITIAL_DATA.placementRegions || []).length + ' منطقهٔ Placement به‌صورت چرخشی در ساب تولید می‌شوند.</span>';
+    var colo = (raw.split(':')[1] || '').toUpperCase();
+    var item = (INITIAL_DATA.placementRegions || []).filter(function(r) { return r.colo === colo; })[0];
+    if (!item) return '';
+    return '<span class="field-hint">Cloudflare targets: <code dir="ltr">' + item.targets.join(' · ') + '</code></span>';
+  }
+
   function fieldHtml(field, value) {
     var id = 'uf_' + field.key;
     var val = value === undefined || value === null ? field.def : value;
     var hint = field.hint ? '<span class="field-hint">' + field.hint + '</span>' : '';
     var wideClass = field.wide ? ' style="grid-column: 1 / -1;"' : '';
+    var shell = fieldShellAttrs(field);
     if (field.type === 'textarea') {
       var rows = field.rows || 4;
-      return '<div class="field"' + wideClass + '><label>' + field.label + '</label>' +
+      return '<div class="field"' + wideClass + shell + '><label>' + field.label + '</label>' +
         '<textarea id="' + id + '" data-uf="' + field.key + '" rows="' + rows + '" spellcheck="false" dir="ltr" placeholder="' +
         String(field.ph || '').split(NL).join('&#10;').replace(/"/g, '&quot;') + '">' +
         manualListToLines(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' + hint + ipPoolControlHtml(field) + '</div>';
     }
     if (field.type === 'switch') {
       var on = String(val) === 'yes';
-      return '<div class="switch-row"><div class="switch-meta"><div><b>' + field.label + '</b>' + hint + '</div></div>' +
+      return '<div class="switch-row"' + shell + '><div class="switch-meta"><div><b>' + field.label + '</b>' + hint + '</div></div>' +
         '<label class="switch"><input type="checkbox" id="' + id + '" data-uf="' + field.key + '" data-type="switch"' + (on ? ' checked' : '') + '><i></i></label></div>';
     }
     if (field.type === 'select') {
-      return '<div class="field"><label>' + field.label + '</label>' +
-        '<select id="' + id + '" data-uf="' + field.key + '">' + optionHtml(field, val) + '</select>' + hint + '</div>';
+      var extra = field.key === 'placement' ? placementTargetsHint(val) : '';
+      return '<div class="field"' + shell + '><label>' + field.label + '</label>' +
+        '<select id="' + id + '" data-uf="' + field.key + '">' + optionHtml(field, val) + '</select>' + hint + extra + '</div>';
+    }
+    if (field.type === 'regionMulti') {
+      var picked = String(val || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      var regionItems = INITIAL_DATA.proxyRegions || [];
+      var regionChips = regionItems.map(function(region) {
+        var on = picked.indexOf(region.code) !== -1;
+        return '<label class="region-chip' + (on ? ' is-on' : '') + '">' +
+          '<input type="checkbox" data-multi-pick="' + field.key + '" value="' + region.code + '"' + (on ? ' checked' : '') + '>' +
+          '<span>' + region.flag + ' ' + region.name + ' <b>' + region.code + '</b></span></label>';
+      }).join('');
+      return '<div class="field"' + wideClass + shell + '><label>' + field.label + '</label>' +
+        '<input type="hidden" id="' + id + '" data-uf="' + field.key + '" value="' + picked.join(',') + '">' +
+        '<div class="region-picker" data-region-picker="' + field.key + '">' + regionChips + '</div>' + hint + '</div>';
     }
     if (field.type === 'portChips') {
       var selectedPorts = String(val || '').split(/[,\s]+/).filter(Boolean);
@@ -23702,7 +24226,7 @@ ${PWA_HEAD_TAGS}
           '<input type="checkbox" data-port-pick="' + field.key + '" value="' + c.port + '"' + (on ? ' checked' : '') + ' aria-label="پورت ' + c.port + '">' +
           '<b>' + c.port + '</b><small>' + (c.tls ? 'TLS' : 'HTTP') + '</small></label>';
       }).join('');
-      return '<div class="field port-field" data-port-field="' + field.key + '">' +
+      return '<div class="field port-field" data-port-field="' + field.key + '"' + shell + '>' +
         '<label>' + field.label + '</label>' +
         '<input type="hidden" id="' + id + '" data-uf="' + field.key + '" value="' + selectedPorts.join(',') + '">' +
         '<div class="port-chips">' + chips + '</div>' +
@@ -23716,7 +24240,7 @@ ${PWA_HEAD_TAGS}
     if (field.type === 'number') attrs += ' min="' + (field.min === undefined ? 0 : field.min) + '" max="' + (field.max === undefined ? 999 : field.max) + '" step="1"';
     if (field.list) attrs += ' list="' + field.list + '"';
     if (field.ph) attrs += ' placeholder="' + field.ph.replace(/"/g, '&quot;') + '"';
-    return '<div class="field"><label>' + field.label + '</label>' +
+    return '<div class="field"' + shell + '><label>' + field.label + '</label>' +
       '<input ' + attrs + ' value="' + String(val === undefined ? '' : val).replace(/"/g, '&quot;') + '">' + hint + ipPoolControlHtml(field) + '</div>';
   }
 
@@ -23744,6 +24268,20 @@ ${PWA_HEAD_TAGS}
     if (!field) return;
     field.querySelectorAll('input[data-port-pick]').forEach(function(input) { input.checked = checked; });
     syncPortChips(fieldKey);
+  }
+
+  function syncRegionPicker(fieldKey) {
+    var picker = document.querySelector('[data-region-picker="' + fieldKey + '"]');
+    if (!picker) return;
+    var values = [];
+    picker.querySelectorAll('input[data-multi-pick]').forEach(function(input) {
+      if (input.checked) values.push(input.value);
+      var chip = input.closest('.region-chip');
+      if (chip) chip.classList.toggle('is-on', input.checked);
+    });
+    var hidden = $('uf_' + fieldKey);
+    if (hidden) hidden.value = values.join(',');
+    updateFormSummary();
   }
 
   function formPaneHtml(group, cfg) {
@@ -23798,10 +24336,18 @@ ${PWA_HEAD_TAGS}
     };
     var parts = [];
     parts.push(chip('<b>' + (protos.join(' + ') || 'بدون پروتکل') + '</b>', 'on'));
-    parts.push(chip('منطقه <b>' + (cfg.region && cfg.region !== 'auto' ? cfg.region : 'خودکار') + '</b>'));
+    var placementRaw = String(cfg.placement || 'auto');
+    var placementMode = placementRaw.indexOf('manual_placement:') === 0
+      ? 'manual_placement'
+      : placementRaw === 'multi_placement' ? 'multi_placement' : 'auto';
+    var placementText = placementMode === 'manual_placement'
+      ? 'Placement: ' + (placementRaw.split(':')[1] || cfg.placementColo || '—')
+      : placementMode === 'multi_placement' ? 'مولتی‌لوکیشن' : 'خودکار';
+    parts.push(chip('منطقه <b>' + placementText + '</b>'));
     parts.push(chip(cfg.ipMode === 'fixed' ? '<b>آی‌پی ثابت</b>' : 'کشور ثابت', cfg.ipMode === 'fixed' ? 'on' : ''));
     parts.push(chip('فرگمنت <b>' + (cfg.frag === 'yes' && cfg.fragmentPreset !== 'off' ? 'روشن' : 'خاموش') + '</b>', cfg.frag === 'yes' && cfg.fragmentPreset !== 'off' ? 'on' : ''));
-    parts.push(chip('تحریم‌شکن <b>' + (cfg.sb === 'yes' ? 'روشن' : 'خاموش') + '</b>'));
+    var proxyText = cfg.proxyMode === 'multi_cmliu' ? 'مولتی‌CMLiu' : cfg.proxyMode === 'manual_proxyip' ? 'دستی' : 'هماهنگ با Placement';
+    parts.push(chip('تحریم‌شکن <b>' + (cfg.sb === 'yes' ? 'روشن · ' + proxyText : 'خاموش') + '</b>', cfg.sb === 'yes' ? 'on' : ''));
     var warpOn = cfg.warp === 'yes' || cfg.warpPro === 'yes' || cfg.warpMl === 'yes' || cfg.warpMasque === 'yes';
     if (warpOn) parts.push(chip('WARP <b>' + (parseInt(cfg.warpCount, 10) || 0) + '</b>', 'on'));
     if (cfg.ovpn === 'yes') parts.push(chip('OpenVPN <b>' + (parseInt(cfg.ovpnCount, 10) || 0) + '</b>', 'on'));
@@ -23835,9 +24381,9 @@ ${PWA_HEAD_TAGS}
       '<div class="field"><label>حجم مجاز (گیگابایت) — ۰ = نامحدود</label><input type="number" id="uf_dataLimitGb" min="0" step="1" list="dlDataLimit" value="' + Number((user && user.dataLimitGb) || 0) + '"></div>' +
       '<div class="field"><label>مدت اعتبار (روز) — ۰ = بدون انقضا</label><input type="number" id="uf_expireDays" min="0" step="1" list="dlExpireDays" value="' + Number((user && user.expireDays) || 0) + '"></div>' +
       '<div class="field"><label>سقف دستگاه متصل</label><input type="number" id="uf_ipLimit" min="1" max="200" step="1" value="' + Number((user && user.ipLimit) || 50) + '"></div>' +
-      '<div class="field"><label>تعداد نود در ساب‌لینک (حداقل ۱۰۰)</label><input type="number" id="uf_subNodeCount" min="100" max="2000" step="10" value="' + Math.max(100, Number((user && user.subNodeCount) || 100)) + '"></div>' +
+      '<div class="field"><label>تعداد نود در ساب‌لینک (۰ = خودکار)</label><input type="number" id="uf_subNodeCount" min="0" step="1" value="' + Math.max(0, Number((user && user.subNodeCount) || 0)) + '"></div>' +
       '</div>' +
-      '<div class="field" style="margin-top:10px;"><span class="field-hint">تعداد کانفیگ را خود پنل از مجموع آدرس‌های فعال می‌سازد و با ویرایش همین عدد، تعداد نودهای ساب همان کاربر عوض می‌شود. برای قفل‌کردن نودها روی یک آی‌پی، از تب «آدرس‌ها و منطقه» حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
+      '<div class="field" style="margin-top:10px;"><span class="field-hint">مقدار ۰ یعنی بدون سقف؛ تعداد نهایی از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت (TLS/HTTP) محاسبه می‌شود. برای قفل‌کردن نودها روی یک آی‌پی، از تب «آدرس‌ها و منطقه» حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
 
     var tabButton = function(id, label, iconName) {
       var on = activeTab === id;
@@ -23859,6 +24405,8 @@ ${PWA_HEAD_TAGS}
     if ($('userFormTitle')) $('userFormTitle').innerHTML = (user ? ICO.refresh + ' ویرایش کاربر «' + escHtml(user.username || '') + '»' : ICO.plus + ' ایجاد کاربر جدید');
     if ($('userFormSubmit')) $('userFormSubmit').innerHTML = user ? ICO.check + ' ذخیرهٔ تغییرات' : ICO.check + ' ساخت کاربر';
     enhanceAllCustomSelects(body);
+    syncConditionalFields();
+    syncProxyManualField(false);
     // فرم جدید همیشه از بالای پنل باز شود، نه از موقعیت اسکرول فرم قبلی.
     body.scrollTop = 0;
   }
@@ -23891,7 +24439,7 @@ ${PWA_HEAD_TAGS}
       dataLimitGb: Number(val('uf_dataLimitGb', '0')) || 0,
       expireDays: Number(val('uf_expireDays', '0')) || 0,
       ipLimit: Number(val('uf_ipLimit', '50')) || 50,
-      subNodeCount: Math.max(100, Number(val('uf_subNodeCount', '100')) || 100),
+      subNodeCount: Math.max(0, parseInt(val('uf_subNodeCount', '0'), 10) || 0),
       config: config
     };
   }
@@ -23939,7 +24487,7 @@ ${PWA_HEAD_TAGS}
       dataLimitGb: Math.max(0, Number(p.dataLimitGb) || 0),
       expireDays: Math.max(0, parseInt(p.expireDays, 10) || 0),
       ipLimit: Math.max(1, parseInt(p.ipLimit, 10) || 50),
-      subNodeCount: 100,
+      subNodeCount: 0,
       startOnFirstUse: p.startOnFirstUse !== false,
       nodeScope: p.nodeScope || 'all',
       config: baseCfg
@@ -24747,11 +25295,42 @@ ${PWA_HEAD_TAGS}
   }
 
   function syncConditionalFields() {
-    document.querySelectorAll('[data-show-when]').forEach(function(el) {
-      var key = el.getAttribute('data-show-when');
-      var input = document.querySelector('.switch input[data-key="' + key + '"]');
-      el.style.display = (!input || input.checked) ? '' : 'none';
+    // یک فیلد می‌تواند هم به یک سوییچ (sb) و هم به مقدار یک select وابسته باشد.
+    document.querySelectorAll('[data-show-when], [data-show-when-key]').forEach(function(el) {
+      var visible = true;
+      var switchKey = el.getAttribute('data-show-when');
+      if (switchKey) {
+        var switchInput = document.querySelector('#createModal [data-uf="' + switchKey + '"]')
+          || document.querySelector('.switch input[data-key="' + switchKey + '"]');
+        visible = !switchInput || Boolean(switchInput.checked);
+      }
+      var fieldKey = el.getAttribute('data-show-when-key');
+      if (fieldKey && visible) {
+        var expected = el.getAttribute('data-show-when-value') || '';
+        var input = document.querySelector('#createModal [data-uf="' + fieldKey + '"]');
+        var value = '';
+        if (input) {
+          if (input.type === 'checkbox') value = input.checked ? 'yes' : 'no';
+          else if (input.multiple) value = Array.from(input.selectedOptions || []).map(function(o) { return o.value; }).join(',');
+          else value = input.value;
+        }
+        var allowed = expected.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        visible = !allowed.length || allowed.indexOf(value) !== -1;
+      }
+      el.style.display = visible ? '' : 'none';
     });
+  }
+
+  // انتخاب کشور در حالت دستی، کادر ProxyIP را با دامنهٔ همان کشور پر می‌کند.
+  function syncProxyManualField(force) {
+    var mode = document.querySelector('#createModal [data-uf="proxyMode"]');
+    var region = document.querySelector('#createModal [data-uf="proxyRegion"]');
+    var p = $('uf_p');
+    if (!mode || !region || !p) return;
+    if (mode.value !== 'manual_proxyip') return;
+    var item = (INITIAL_DATA.proxyRegions || []).filter(function(r) { return r.code === region.value; })[0];
+    if (!item) return;
+    if (force || !String(p.value || '').trim()) p.value = item.host + ':443';
   }
 
   function rotatePath() {
@@ -25272,6 +25851,10 @@ ${PWA_HEAD_TAGS}
       syncPortChips(target.getAttribute('data-port-pick'));
       return;
     }
+    if (target.matches && target.matches('input[data-multi-pick]')) {
+      syncRegionPicker(target.getAttribute('data-multi-pick'));
+      return;
+    }
     if (target.matches && target.matches('.switch input[data-key]')) {
       var key = target.getAttribute('data-key');
       if (key === 'frag' || key === 'ech') syncConditionalFields();
@@ -25279,7 +25862,12 @@ ${PWA_HEAD_TAGS}
     if (target.matches && target.matches('input[data-scan]')) {
       toggleScanMode(target.getAttribute('data-scan'), target.checked);
     }
-    if (target.closest && target.closest('#createModal')) updateFormSummary();
+    if (target.closest && target.closest('#createModal')) {
+      updateFormSummary();
+      syncConditionalFields();
+    }
+    if (target.id === 'uf_proxyRegion') syncProxyManualField(true);
+    if (target.id === 'uf_proxyMode') syncProxyManualField(target.value === 'manual_proxyip');
     if (target.id === 'uf_preset') applyPresetToForm();
     if (target.id === 'fxToggleSwitch') applyFx(target.checked ? 'auto' : 'off');
     if (target.id === 'dnsPreset') {

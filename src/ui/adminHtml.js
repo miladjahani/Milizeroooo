@@ -15,6 +15,8 @@ import {
   FRAGMENT_PRESETS,
   MAX_USERS_LIMIT,
   PATH_PATTERNS,
+  PLACEMENT_REGIONS,
+  PROXYIP_REGIONS,
   TELEGRAM_SUPPORT,
   VERSION
 } from '../config/defaults.js';
@@ -156,6 +158,8 @@ export function renderAdminDashboardHtml(initialData = {}) {
       acc[code] = { name: item.name || code, flag: item.flag || '' };
       return acc;
     }, {}),
+    placementRegions: PLACEMENT_REGIONS,
+    proxyRegions: PROXYIP_REGIONS,
     vipCountries: EDGE_VIP_COUNTRIES,
     // استخر آی‌پی اختصاصی؛ برای انتخاب تصادفی در پنجرهٔ تنظیمات کاربر و ساخت ساب /ips
     ipPool: IP_POOL,
@@ -2222,6 +2226,15 @@ ${PWA_HEAD_TAGS}
   .port-mini:hover { color: var(--neon); border-color: rgba(var(--neon-rgb), 0.45); }
   .port-hint { font-size: 0.62rem; opacity: 0.5; }
   body.light-mode .port-chip { background: #ffffff; }
+  .region-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; max-height: 220px; overflow: auto; margin-top: 2px; padding: 2px; }
+  .region-chip { position: relative; display: flex; align-items: center; min-width: 0; padding: 7px 8px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer; font-size: 0.68rem; line-height: 1.5; user-select: none; }
+  .region-chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .region-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .region-chip b { color: var(--text); direction: ltr; font-size: 0.62rem; margin-inline-start: 3px; }
+  .region-chip:hover { border-color: var(--line-strong); color: var(--text); }
+  .region-chip.is-on { border-color: rgba(var(--neon-rgb), 0.5); background: rgba(var(--neon-rgb), 0.1); color: var(--neon); }
+  .region-chip.is-on b { color: var(--neon); }
+  body.light-mode .region-chip { background: #ffffff; }
   #createModal .port-chip { padding: 5px 4px; font-size: 0.64rem; }
   #createModal .port-chip small { font-size: 0.52rem; }
   @media (max-width: 720px) {
@@ -2231,6 +2244,8 @@ ${PWA_HEAD_TAGS}
     .port-chip small { font-size: 0.52rem; }
     .port-actions { gap: 5px; }
     .port-hint { width: 100%; }
+    .region-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .region-chip { padding: 6px 7px; font-size: 0.64rem; }
   }
   @media (max-width: 380px) {
     .port-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -4172,7 +4187,7 @@ ${PWA_HEAD_TAGS}
             <div class="help-card">
               <h4>${icon('gauge')} تعداد نود هر کاربر</h4>
               <ul>
-                <li>حداقل ۱۰۰ نود برای هر کاربر ساخته می‌شود و با ویرایش همین عدد قابل تغییر است.</li>
+                <li>تعداد نود به‌صورت خودکار از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت ساخته می‌شود؛ مقدار ۰ یعنی بدون سقف.</li>
                 <li>آدرس‌ها از همهٔ مخزن‌ها (IPv4، IPv6، دامنه، ProxyIP و SOCKS/HTTP) انتخاب می‌شوند.</li>
                 <li>هر کاربر آدرس‌های اختصاصی می‌گیرد؛ آدرس کاربران قبلی دوباره استفاده نمی‌شود.</li>
               </ul>
@@ -4678,6 +4693,10 @@ ${PWA_HEAD_TAGS}
       card.className = 'user-card';
       var nodeCount = Number(u.subNodeCount || 0);
       var key = userKey(u);
+      var ucfg = u.config || {};
+      var placementTag = ucfg.placementMode === 'manual_placement'
+        ? 'Placement: ' + (ucfg.placementColo || '—')
+        : ucfg.placementMode === 'multi_placement' ? 'مولتی‌لوکیشن' : 'منطقه خودکار';
       card.innerHTML = [
         '<div class="user-head">',
           '<div><div class="user-name">' + escHtml(u.username || ('کاربر ' + (idx + 1))) + '</div>',
@@ -4688,8 +4707,9 @@ ${PWA_HEAD_TAGS}
         '<div class="bar"><i style="width:' + Math.max(pct, 2) + '%"></i></div>',
         '<div class="usage"><span>' + t('card.expiry') + ' ' + fmtDate(u.expireAt) + '</span><span>' + (nodeCount ? nodeCount + ' نود' : t('card.nodesAuto')) + '</span></div>',
         '<div class="user-tags">' + activeProtocols().map(function(p) { return '<span class="tag on">' + p + '</span>'; }).join('') +
-          (u.config && u.config.sb === 'yes' ? '<span class="tag on" title="خروجی از آدرس واسط بیرون از ایران">' + ICO.sanctions + ' تحریم‌شکن</span>' : '') +
-          (u.config && u.config.awgv ? '<span class="tag" title="نسخهٔ امنزیا در نودهای WARP">' + ICO.warp + ' امنزیا ' + u.config.awgv + '</span>' : '') +
+          '<span class="tag" title="Placement کلودفلر">' + ICO.pin + ' ' + placementTag + '</span>' +
+          (ucfg.sb === 'yes' ? '<span class="tag on" title="خروجی از آدرس واسط بیرون از ایران">' + ICO.sanctions + ' تحریم‌شکن · ' + (ucfg.proxyMode === 'multi_cmliu' ? 'مولتی CMLiu' : ucfg.proxyMode === 'manual_proxyip' ? 'دستی' : 'هماهنگ') + '</span>' : '') +
+          (ucfg.awgv ? '<span class="tag" title="نسخهٔ امنزیا در نودهای WARP">' + ICO.warp + ' امنزیا ' + ucfg.awgv + '</span>' : '') +
         '</div>',
         '<div class="user-actions" style="margin-top:auto;">',
           '<button class="btn sm primary" type="button" data-act="copy" data-url="' + base + '">' + ICO.copy + ' ' + t('btn.copySub') + '</button>',
@@ -5530,14 +5550,16 @@ ${PWA_HEAD_TAGS}
       title: 'آدرس‌ها و منطقه',
       icon: 'pin',
       fields: [
-        { key: 'region', section: 'منطقه', label: 'منطقهٔ خروجی', type: 'select', def: 'auto', options: 'regions', hint: 'کشور خروجی نودها؛ «خودکار» یعنی بدون محدودیت کشور.' },
+        { key: 'placement', section: 'منطقه', label: 'منطقهٔ خروجی — Cloudflare Placement', type: 'select', def: 'auto', options: 'placementRegions', hint: 'این انتخاب فقط Placement، کد Colo و مسیر خروج را کنترل می‌کند؛ آدرس نودها همان استخر ۶۹۶ آی‌پی یا آدرس‌های دستی باقی می‌ماند. «خودکار» از request.cf.colo استفاده می‌کند.' },
         { key: 'ipMode', section: 'آی‌پی نود در کلاینت', label: 'حالت آی‌پی', type: 'select', def: 'country', options: [['country', 'کشور ثابت (آدرس‌ها از استخر تازه می‌شوند)'], ['fixed', 'آی‌پی ثابت (یک آدرس برای همهٔ نودها)']], hint: 'در حالت «آی‌پی ثابت»، با هر پینگ یا بروزرسانی ساب، آدرس و کشور خروجی نود عوض نمی‌شود؛ برای تضمین این ثبات، نودهای WARP در این حالت ساخته نمی‌شوند.' },
         { key: 'ipPinned', section: 'آی‌پی نود در کلاینت', label: 'آی‌پی ثابت دلخواه', type: 'text', def: '', ph: '104.16.0.1 یا 104.16.0.1:443 — خالی = انتخاب پایدار خودکار', hint: 'فقط در حالت «آی‌پی ثابت» استفاده می‌شود؛ خالی بماند، پنل خودش یک آدرس پایدار انتخاب می‌کند.' },
         { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 4, wide: true, def: '', pool: true, ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
         { key: 'yxURL', section: 'آدرس‌های دستی', label: 'منبع آنلاین آدرس‌ها', type: 'text', wide: true, def: '', list: 'dlYxUrl', ph: 'https://... (چند نشانی را با کاما جدا کنید)' },
         { key: 'sb', section: 'مسیر خروج', label: 'تحریم‌شکن (خروجی از آدرس واسط)', hint: 'همهٔ نودها از یک آدرس بیرون از ایران خارج می‌شوند تا سرویس‌های مسدود برای آی‌پی ایران باز شوند', type: 'switch', def: 'yes' },
-        { key: 'sbRegion', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'DE', options: 'regions' },
-        { key: 'p', section: 'مسیر خروج', label: 'آدرس واسط (ProxyIP)', type: 'text', def: '', list: 'dlProxyIp', ph: 'ProxyIP.DE.example.com:443' },
+        { key: 'proxyMode', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'sync_placement', options: [['sync_placement', '⚡ خودکار (هماهنگ با منطقهٔ Placement بالا)'], ['multi_cmliu', '🌍 مولتی‌لوکیشن (همه کشورها در ساب)'], ['manual_proxyip', '📍 تک‌کشور / دستی']], showWhenSwitch: 'sb', hint: 'در حالت خودکار، Colo همان درخواست یا Placement انتخاب‌شده به‌صورت داینامیک به ProxyIP تبدیل می‌شود.' },
+        { key: 'proxyRegion', section: 'مسیر خروج', label: 'کشور تحریم‌شکن (تک‌کشور)', type: 'select', def: 'DE', options: 'proxyRegions', showWhenSwitch: 'sb', showWhen: { key: 'proxyMode', equals: 'manual_proxyip' }, hint: 'با انتخاب کشور، کادر آدرس واسط به‌صورت خودکار پر می‌شود؛ می‌توانید بعداً آن را دستی تغییر دهید.' },
+        { key: 'proxyMultiRegions', section: 'مسیر خروج', label: 'کشورهای تحریم‌شکن (چندانتخابی)', type: 'regionMulti', wide: true, def: 'DE,NL,UK,FR,FI,PL,TR,IAD,LAX,CA,AE,SG,JP,KR,HK,Oracle,DigitalOcean,Vultr,BPB', showWhenSwitch: 'sb', showWhen: { key: 'proxyMode', equals: 'multi_cmliu' }, hint: 'برای هر کشور یک کانفیگ مجزا با ProxyIP همان کشور ساخته می‌شود.' },
+        { key: 'p', section: 'مسیر خروج', label: 'آدرس واسط (ProxyIP)', type: 'text', def: '', list: 'dlProxyIp', ph: 'ProxyIP.DE.CMLiussss.net:443', showWhenSwitch: 'sb', hint: 'در حالت دستی می‌توانید یک یا چند دامنه/آی‌پی را با کاما وارد کنید؛ در حالت خودکار خالی بگذارید.' },
         { key: 's', section: 'مسیر خروج', label: 'پروکسی خروجی', type: 'text', def: '', list: 'dlProxy', ph: 'socks5://host:1080' }
       ]
     },
@@ -5604,6 +5626,17 @@ ${PWA_HEAD_TAGS}
         pairs = [['auto', 'خودکار (بدون محدودیت منطقه)'], ['CF', 'مستقیم کلادفلر (CF)']];
         var srcs = INITIAL_DATA.countrySources || {};
         Object.keys(srcs).sort().forEach(function(code) { pairs.push([code, srcs[code].name + ' — ' + code]); });
+      }
+      else if (list === 'placementRegions') {
+        pairs = [['auto', 'خودکار (بدون محدودیت منطقه)'], ['multi_placement', '🌍 مولتی‌لوکیشن Placement']];
+        (INITIAL_DATA.placementRegions || []).forEach(function(region) {
+          pairs.push(['manual_placement:' + region.colo, region.flag + ' ' + region.name + ' — ' + region.colo]);
+        });
+      }
+      else if (list === 'proxyRegions') {
+        pairs = (INITIAL_DATA.proxyRegions || []).map(function(region) {
+          return [region.code, region.flag + ' ' + region.name + ' — ' + region.code];
+        });
       }
     } else if (Array.isArray(list)) {
       pairs = list;
@@ -5687,26 +5720,61 @@ ${PWA_HEAD_TAGS}
     '</div>';
   }
 
+  function fieldShellAttrs(field) {
+    var attrs = '';
+    if (field.showWhenSwitch) attrs += ' data-show-when="' + String(field.showWhenSwitch).replace(/"/g, '&quot;') + '"';
+    if (field.showWhen && field.showWhen.key) {
+      attrs += ' data-show-when-key="' + String(field.showWhen.key).replace(/"/g, '&quot;') + '"' +
+        ' data-show-when-value="' + String(field.showWhen.equals === undefined ? '' : field.showWhen.equals).replace(/"/g, '&quot;') + '"';
+    }
+    return attrs;
+  }
+
+  function placementTargetsHint(value) {
+    var raw = String(value || 'auto');
+    if (raw === 'auto') return '<span class="field-hint">Colo در زمان اتصال از <code>request.cf.colo</code> خوانده می‌شود.</span>';
+    if (raw === 'multi_placement') return '<span class="field-hint">همهٔ ' + (INITIAL_DATA.placementRegions || []).length + ' منطقهٔ Placement به‌صورت چرخشی در ساب تولید می‌شوند.</span>';
+    var colo = (raw.split(':')[1] || '').toUpperCase();
+    var item = (INITIAL_DATA.placementRegions || []).filter(function(r) { return r.colo === colo; })[0];
+    if (!item) return '';
+    return '<span class="field-hint">Cloudflare targets: <code dir="ltr">' + item.targets.join(' · ') + '</code></span>';
+  }
+
   function fieldHtml(field, value) {
     var id = 'uf_' + field.key;
     var val = value === undefined || value === null ? field.def : value;
     var hint = field.hint ? '<span class="field-hint">' + field.hint + '</span>' : '';
     var wideClass = field.wide ? ' style="grid-column: 1 / -1;"' : '';
+    var shell = fieldShellAttrs(field);
     if (field.type === 'textarea') {
       var rows = field.rows || 4;
-      return '<div class="field"' + wideClass + '><label>' + field.label + '</label>' +
+      return '<div class="field"' + wideClass + shell + '><label>' + field.label + '</label>' +
         '<textarea id="' + id + '" data-uf="' + field.key + '" rows="' + rows + '" spellcheck="false" dir="ltr" placeholder="' +
         String(field.ph || '').split(NL).join('&#10;').replace(/"/g, '&quot;') + '">' +
         manualListToLines(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' + hint + ipPoolControlHtml(field) + '</div>';
     }
     if (field.type === 'switch') {
       var on = String(val) === 'yes';
-      return '<div class="switch-row"><div class="switch-meta"><div><b>' + field.label + '</b>' + hint + '</div></div>' +
+      return '<div class="switch-row"' + shell + '><div class="switch-meta"><div><b>' + field.label + '</b>' + hint + '</div></div>' +
         '<label class="switch"><input type="checkbox" id="' + id + '" data-uf="' + field.key + '" data-type="switch"' + (on ? ' checked' : '') + '><i></i></label></div>';
     }
     if (field.type === 'select') {
-      return '<div class="field"><label>' + field.label + '</label>' +
-        '<select id="' + id + '" data-uf="' + field.key + '">' + optionHtml(field, val) + '</select>' + hint + '</div>';
+      var extra = field.key === 'placement' ? placementTargetsHint(val) : '';
+      return '<div class="field"' + shell + '><label>' + field.label + '</label>' +
+        '<select id="' + id + '" data-uf="' + field.key + '">' + optionHtml(field, val) + '</select>' + hint + extra + '</div>';
+    }
+    if (field.type === 'regionMulti') {
+      var picked = String(val || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      var regionItems = INITIAL_DATA.proxyRegions || [];
+      var regionChips = regionItems.map(function(region) {
+        var on = picked.indexOf(region.code) !== -1;
+        return '<label class="region-chip' + (on ? ' is-on' : '') + '">' +
+          '<input type="checkbox" data-multi-pick="' + field.key + '" value="' + region.code + '"' + (on ? ' checked' : '') + '>' +
+          '<span>' + region.flag + ' ' + region.name + ' <b>' + region.code + '</b></span></label>';
+      }).join('');
+      return '<div class="field"' + wideClass + shell + '><label>' + field.label + '</label>' +
+        '<input type="hidden" id="' + id + '" data-uf="' + field.key + '" value="' + picked.join(',') + '">' +
+        '<div class="region-picker" data-region-picker="' + field.key + '">' + regionChips + '</div>' + hint + '</div>';
     }
     if (field.type === 'portChips') {
       var selectedPorts = String(val || '').split(/[,\s]+/).filter(Boolean);
@@ -5717,7 +5785,7 @@ ${PWA_HEAD_TAGS}
           '<input type="checkbox" data-port-pick="' + field.key + '" value="' + c.port + '"' + (on ? ' checked' : '') + ' aria-label="پورت ' + c.port + '">' +
           '<b>' + c.port + '</b><small>' + (c.tls ? 'TLS' : 'HTTP') + '</small></label>';
       }).join('');
-      return '<div class="field port-field" data-port-field="' + field.key + '">' +
+      return '<div class="field port-field" data-port-field="' + field.key + '"' + shell + '>' +
         '<label>' + field.label + '</label>' +
         '<input type="hidden" id="' + id + '" data-uf="' + field.key + '" value="' + selectedPorts.join(',') + '">' +
         '<div class="port-chips">' + chips + '</div>' +
@@ -5731,7 +5799,7 @@ ${PWA_HEAD_TAGS}
     if (field.type === 'number') attrs += ' min="' + (field.min === undefined ? 0 : field.min) + '" max="' + (field.max === undefined ? 999 : field.max) + '" step="1"';
     if (field.list) attrs += ' list="' + field.list + '"';
     if (field.ph) attrs += ' placeholder="' + field.ph.replace(/"/g, '&quot;') + '"';
-    return '<div class="field"><label>' + field.label + '</label>' +
+    return '<div class="field"' + shell + '><label>' + field.label + '</label>' +
       '<input ' + attrs + ' value="' + String(val === undefined ? '' : val).replace(/"/g, '&quot;') + '">' + hint + ipPoolControlHtml(field) + '</div>';
   }
 
@@ -5759,6 +5827,20 @@ ${PWA_HEAD_TAGS}
     if (!field) return;
     field.querySelectorAll('input[data-port-pick]').forEach(function(input) { input.checked = checked; });
     syncPortChips(fieldKey);
+  }
+
+  function syncRegionPicker(fieldKey) {
+    var picker = document.querySelector('[data-region-picker="' + fieldKey + '"]');
+    if (!picker) return;
+    var values = [];
+    picker.querySelectorAll('input[data-multi-pick]').forEach(function(input) {
+      if (input.checked) values.push(input.value);
+      var chip = input.closest('.region-chip');
+      if (chip) chip.classList.toggle('is-on', input.checked);
+    });
+    var hidden = $('uf_' + fieldKey);
+    if (hidden) hidden.value = values.join(',');
+    updateFormSummary();
   }
 
   function formPaneHtml(group, cfg) {
@@ -5813,10 +5895,18 @@ ${PWA_HEAD_TAGS}
     };
     var parts = [];
     parts.push(chip('<b>' + (protos.join(' + ') || 'بدون پروتکل') + '</b>', 'on'));
-    parts.push(chip('منطقه <b>' + (cfg.region && cfg.region !== 'auto' ? cfg.region : 'خودکار') + '</b>'));
+    var placementRaw = String(cfg.placement || 'auto');
+    var placementMode = placementRaw.indexOf('manual_placement:') === 0
+      ? 'manual_placement'
+      : placementRaw === 'multi_placement' ? 'multi_placement' : 'auto';
+    var placementText = placementMode === 'manual_placement'
+      ? 'Placement: ' + (placementRaw.split(':')[1] || cfg.placementColo || '—')
+      : placementMode === 'multi_placement' ? 'مولتی‌لوکیشن' : 'خودکار';
+    parts.push(chip('منطقه <b>' + placementText + '</b>'));
     parts.push(chip(cfg.ipMode === 'fixed' ? '<b>آی‌پی ثابت</b>' : 'کشور ثابت', cfg.ipMode === 'fixed' ? 'on' : ''));
     parts.push(chip('فرگمنت <b>' + (cfg.frag === 'yes' && cfg.fragmentPreset !== 'off' ? 'روشن' : 'خاموش') + '</b>', cfg.frag === 'yes' && cfg.fragmentPreset !== 'off' ? 'on' : ''));
-    parts.push(chip('تحریم‌شکن <b>' + (cfg.sb === 'yes' ? 'روشن' : 'خاموش') + '</b>'));
+    var proxyText = cfg.proxyMode === 'multi_cmliu' ? 'مولتی‌CMLiu' : cfg.proxyMode === 'manual_proxyip' ? 'دستی' : 'هماهنگ با Placement';
+    parts.push(chip('تحریم‌شکن <b>' + (cfg.sb === 'yes' ? 'روشن · ' + proxyText : 'خاموش') + '</b>', cfg.sb === 'yes' ? 'on' : ''));
     var warpOn = cfg.warp === 'yes' || cfg.warpPro === 'yes' || cfg.warpMl === 'yes' || cfg.warpMasque === 'yes';
     if (warpOn) parts.push(chip('WARP <b>' + (parseInt(cfg.warpCount, 10) || 0) + '</b>', 'on'));
     if (cfg.ovpn === 'yes') parts.push(chip('OpenVPN <b>' + (parseInt(cfg.ovpnCount, 10) || 0) + '</b>', 'on'));
@@ -5850,9 +5940,9 @@ ${PWA_HEAD_TAGS}
       '<div class="field"><label>حجم مجاز (گیگابایت) — ۰ = نامحدود</label><input type="number" id="uf_dataLimitGb" min="0" step="1" list="dlDataLimit" value="' + Number((user && user.dataLimitGb) || 0) + '"></div>' +
       '<div class="field"><label>مدت اعتبار (روز) — ۰ = بدون انقضا</label><input type="number" id="uf_expireDays" min="0" step="1" list="dlExpireDays" value="' + Number((user && user.expireDays) || 0) + '"></div>' +
       '<div class="field"><label>سقف دستگاه متصل</label><input type="number" id="uf_ipLimit" min="1" max="200" step="1" value="' + Number((user && user.ipLimit) || 50) + '"></div>' +
-      '<div class="field"><label>تعداد نود در ساب‌لینک (حداقل ۱۰۰)</label><input type="number" id="uf_subNodeCount" min="100" max="2000" step="10" value="' + Math.max(100, Number((user && user.subNodeCount) || 100)) + '"></div>' +
+      '<div class="field"><label>تعداد نود در ساب‌لینک (۰ = خودکار)</label><input type="number" id="uf_subNodeCount" min="0" step="1" value="' + Math.max(0, Number((user && user.subNodeCount) || 0)) + '"></div>' +
       '</div>' +
-      '<div class="field" style="margin-top:10px;"><span class="field-hint">تعداد کانفیگ را خود پنل از مجموع آدرس‌های فعال می‌سازد و با ویرایش همین عدد، تعداد نودهای ساب همان کاربر عوض می‌شود. برای قفل‌کردن نودها روی یک آی‌پی، از تب «آدرس‌ها و منطقه» حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
+      '<div class="field" style="margin-top:10px;"><span class="field-hint">مقدار ۰ یعنی بدون سقف؛ تعداد نهایی از ترکیب پروتکل‌های فعال، آدرس‌های موجود و حالت‌های پورت (TLS/HTTP) محاسبه می‌شود. برای قفل‌کردن نودها روی یک آی‌پی، از تب «آدرس‌ها و منطقه» حالت «آی‌پی ثابت» را انتخاب کن.</span></div>';
 
     var tabButton = function(id, label, iconName) {
       var on = activeTab === id;
@@ -5874,6 +5964,8 @@ ${PWA_HEAD_TAGS}
     if ($('userFormTitle')) $('userFormTitle').innerHTML = (user ? ICO.refresh + ' ویرایش کاربر «' + escHtml(user.username || '') + '»' : ICO.plus + ' ایجاد کاربر جدید');
     if ($('userFormSubmit')) $('userFormSubmit').innerHTML = user ? ICO.check + ' ذخیرهٔ تغییرات' : ICO.check + ' ساخت کاربر';
     enhanceAllCustomSelects(body);
+    syncConditionalFields();
+    syncProxyManualField(false);
     // فرم جدید همیشه از بالای پنل باز شود، نه از موقعیت اسکرول فرم قبلی.
     body.scrollTop = 0;
   }
@@ -5906,7 +5998,7 @@ ${PWA_HEAD_TAGS}
       dataLimitGb: Number(val('uf_dataLimitGb', '0')) || 0,
       expireDays: Number(val('uf_expireDays', '0')) || 0,
       ipLimit: Number(val('uf_ipLimit', '50')) || 50,
-      subNodeCount: Math.max(100, Number(val('uf_subNodeCount', '100')) || 100),
+      subNodeCount: Math.max(0, parseInt(val('uf_subNodeCount', '0'), 10) || 0),
       config: config
     };
   }
@@ -5954,7 +6046,7 @@ ${PWA_HEAD_TAGS}
       dataLimitGb: Math.max(0, Number(p.dataLimitGb) || 0),
       expireDays: Math.max(0, parseInt(p.expireDays, 10) || 0),
       ipLimit: Math.max(1, parseInt(p.ipLimit, 10) || 50),
-      subNodeCount: 100,
+      subNodeCount: 0,
       startOnFirstUse: p.startOnFirstUse !== false,
       nodeScope: p.nodeScope || 'all',
       config: baseCfg
@@ -6762,11 +6854,42 @@ ${PWA_HEAD_TAGS}
   }
 
   function syncConditionalFields() {
-    document.querySelectorAll('[data-show-when]').forEach(function(el) {
-      var key = el.getAttribute('data-show-when');
-      var input = document.querySelector('.switch input[data-key="' + key + '"]');
-      el.style.display = (!input || input.checked) ? '' : 'none';
+    // یک فیلد می‌تواند هم به یک سوییچ (sb) و هم به مقدار یک select وابسته باشد.
+    document.querySelectorAll('[data-show-when], [data-show-when-key]').forEach(function(el) {
+      var visible = true;
+      var switchKey = el.getAttribute('data-show-when');
+      if (switchKey) {
+        var switchInput = document.querySelector('#createModal [data-uf="' + switchKey + '"]')
+          || document.querySelector('.switch input[data-key="' + switchKey + '"]');
+        visible = !switchInput || Boolean(switchInput.checked);
+      }
+      var fieldKey = el.getAttribute('data-show-when-key');
+      if (fieldKey && visible) {
+        var expected = el.getAttribute('data-show-when-value') || '';
+        var input = document.querySelector('#createModal [data-uf="' + fieldKey + '"]');
+        var value = '';
+        if (input) {
+          if (input.type === 'checkbox') value = input.checked ? 'yes' : 'no';
+          else if (input.multiple) value = Array.from(input.selectedOptions || []).map(function(o) { return o.value; }).join(',');
+          else value = input.value;
+        }
+        var allowed = expected.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        visible = !allowed.length || allowed.indexOf(value) !== -1;
+      }
+      el.style.display = visible ? '' : 'none';
     });
+  }
+
+  // انتخاب کشور در حالت دستی، کادر ProxyIP را با دامنهٔ همان کشور پر می‌کند.
+  function syncProxyManualField(force) {
+    var mode = document.querySelector('#createModal [data-uf="proxyMode"]');
+    var region = document.querySelector('#createModal [data-uf="proxyRegion"]');
+    var p = $('uf_p');
+    if (!mode || !region || !p) return;
+    if (mode.value !== 'manual_proxyip') return;
+    var item = (INITIAL_DATA.proxyRegions || []).filter(function(r) { return r.code === region.value; })[0];
+    if (!item) return;
+    if (force || !String(p.value || '').trim()) p.value = item.host + ':443';
   }
 
   function rotatePath() {
@@ -7287,6 +7410,10 @@ ${PWA_HEAD_TAGS}
       syncPortChips(target.getAttribute('data-port-pick'));
       return;
     }
+    if (target.matches && target.matches('input[data-multi-pick]')) {
+      syncRegionPicker(target.getAttribute('data-multi-pick'));
+      return;
+    }
     if (target.matches && target.matches('.switch input[data-key]')) {
       var key = target.getAttribute('data-key');
       if (key === 'frag' || key === 'ech') syncConditionalFields();
@@ -7294,7 +7421,12 @@ ${PWA_HEAD_TAGS}
     if (target.matches && target.matches('input[data-scan]')) {
       toggleScanMode(target.getAttribute('data-scan'), target.checked);
     }
-    if (target.closest && target.closest('#createModal')) updateFormSummary();
+    if (target.closest && target.closest('#createModal')) {
+      updateFormSummary();
+      syncConditionalFields();
+    }
+    if (target.id === 'uf_proxyRegion') syncProxyManualField(true);
+    if (target.id === 'uf_proxyMode') syncProxyManualField(target.value === 'manual_proxyip');
     if (target.id === 'uf_preset') applyPresetToForm();
     if (target.id === 'fxToggleSwitch') applyFx(target.checked ? 'auto' : 'off');
     if (target.id === 'dnsPreset') {

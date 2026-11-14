@@ -245,12 +245,21 @@ export function buildNodeDisplayName(meta = {}) {
   const protoLabel = NODE_PROTO_LABELS[protoKey] || (protoKey ? protoKey.toUpperCase() : 'Node');
   const family = meta.family || addressFamilyLabel(meta.host);
   const cc = String(meta.cc || '').trim().toUpperCase();
-  const flag = countryFlag(cc);
-  const countryTag = cc ? (flag ? `${flag} ${cc}` : cc) : '🌐 CF';
-  const parts = [countryTag, protoLabel];
+  // اگر مقصد ProxyIP مشخص باشد، پرچم/کد خروج همان مقصد در نام می‌آید؛
+  // این کار باعث می‌شود کاربر تفاوت نودهای چندکشوری را ببیند.
+  const proxyCc = String(meta.proxyCc || '').trim().toUpperCase();
+  const displayCc = /^[A-Z]{2}$/.test(proxyCc) ? proxyCc : cc;
+  const flag = countryFlag(displayCc);
+  const countryTag = displayCc ? (flag ? `${flag} ${displayCc}` : displayCc) : '🌐 CF';
+  const placement = String(meta.placementColo || '').trim().toUpperCase();
+  const parts = [countryTag];
+  if (/^[A-Z]{3}$/.test(placement)) parts.push(`[Placement: ${placement}]`);
+  parts.push(protoLabel);
   if (family) parts.push(family);
   if (meta.tls === false) parts.push('HTTP');
-  if (meta.proxy) parts.push('⇄ Proxy');
+  const proxyCode = String(meta.proxyCode || '').trim();
+  if (proxyCode) parts.push(`⇄ ${proxyCode}`);
+  else if (meta.proxy) parts.push('⇄ Proxy');
   if (meta.mci) parts.push('MCI');
   // نسخهٔ AmneziaWG روی نودهای WARP: AWG2 / AWG3
   if (meta.awg) parts.push(`AWG${meta.awg}`);
@@ -274,7 +283,39 @@ export function finalizeMiliSubscriptionLinks(entries = [], subNodeCount = 0) {
   // «پرش آی‌پی» در کلاینت دیده نمی‌شود.
   prepared.sort((a, b) => (a.base < b.base ? -1 : a.base > b.base ? 1 : a.idx - b.idx));
   const limit = parseInt(subNodeCount, 10);
-  const sliced = Number.isFinite(limit) && limit > 0 ? prepared.slice(0, limit) : prepared;
+  let selected = prepared;
+  if (Number.isFinite(limit) && limit > 0 && prepared.length > limit) {
+    // در حالت مولتی‌لوکیشن، قبل از بریدن سقف نود، از هر مقصد ProxyIP
+    // حداقل یک نود نگه می‌داریم تا هیچ کشوری از ساب حذف نشود.
+    const priority = [];
+    const taken = new Set();
+    const add = (item) => {
+      if (!taken.has(item)) {
+        taken.add(item);
+        priority.push(item);
+      }
+    };
+    const seenProxyCodes = new Set();
+    for (const item of prepared) {
+      const code = String(item.meta?.proxyCode || '');
+      if (code && !seenProxyCodes.has(code)) {
+        seenProxyCodes.add(code);
+        add(item);
+      }
+    }
+    // جدا از تنوع ProxyIP، هر Colo انتخاب‌شده هم باید در سقف نود باقی بماند.
+    const seenPlacements = new Set();
+    for (const item of prepared) {
+      const colo = String(item.meta?.placementColo || '').toUpperCase();
+      if (colo && !seenPlacements.has(colo)) {
+        seenPlacements.add(colo);
+        add(item);
+      }
+    }
+    for (const item of prepared) add(item);
+    selected = priority;
+  }
+  const sliced = Number.isFinite(limit) && limit > 0 ? selected.slice(0, limit) : selected;
   return sliced.map((item, idx) => {
     const nodeName = `${buildNodeDisplayName(item.meta)} · #${idx + 1}`;
     return `${item.base}#${encodeURIComponent(nodeName)}`;

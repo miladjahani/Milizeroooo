@@ -109,8 +109,8 @@ function check(name, pass, detail = '') {
   const sni = await build({ sniHosts: 'edge.example.net' });
   check('دامنهٔ SNI/Host', tlsOnly(sni).some(l => parseLink(l).searchParams.get('sni') === 'edge.example.net'));
 
-  const noHttp = await build({ dkby: 'yes', httpPorts: '80' });
-  check('حذف پورت HTTP', noHttp.every(l => parseLink(l).protocol === 'vless:' && parseLink(l).port === '443'));
+  const noHttp = await build({ dkby: 'yes', httpPorts: '80,8080' });
+  check('حذف پورت HTTP', noHttp.length > 0 && noHttp.every(l => parseLink(l).protocol === 'vless:' && !['80', '8080'].includes(parseLink(l).port)));
 }
 
 // ۲-ب) رمزها، ECH و آدرس واسط (ProxyIP)
@@ -132,10 +132,59 @@ function check(name, pass, detail = '') {
   );
 
   const proxyIp = await build({ p: 'ProxyIP.DE.example.com:443' });
-  check('آدرس واسط ProxyIP', tlsOnly(proxyIp).every(l => (parseLink(l).searchParams.get('path') || '').includes('p=ProxyIP.DE.example.com:443')));
+  check('آدرس واسط ProxyIP', tlsOnly(proxyIp).every(l => (parseLink(l).searchParams.get('path') || '').includes('proxyip=ProxyIP.DE.example.com:443')));
 
-  const sanctions = await build({ sb: 'yes', sbRegion: 'DE', p: '' });
-  check('تحریم‌شکن خودکار', tlsOnly(sanctions).every(l => (parseLink(l).searchParams.get('path') || '').includes('p=')));
+  const sanctions = await build({ sb: 'yes', proxyMode: 'sync_placement', placement: 'auto', p: '' });
+  check('تحریم‌شکن خودکار — proxyip=auto', tlsOnly(sanctions).every(l => (parseLink(l).searchParams.get('path') || '').includes('proxyip=auto')));
+
+  const autoColo = await build({ sb: 'yes', proxyMode: 'sync_placement', placement: 'auto', p: '' }, { colo: 'AMS' });
+  const autoColoTls = tlsOnly(autoColo);
+  check(
+    'Placement خودکار — Colo از request.cf.colo در Remark',
+    autoColoTls.length > 0 && autoColoTls.every(l => decodeURIComponent(String(l).split('#')[1] || '').includes('[Placement: AMS]'))
+  );
+
+  const placement = await build({ sb: 'yes', placement: 'manual_placement:FRA', proxyMode: 'sync_placement', p: '' });
+  const placementTls = tlsOnly(placement);
+  check(
+    'Placement دستی — ProxyIP.FRA و Remark',
+    placementTls.length > 0 &&
+      placementTls.every(l => (parseLink(l).searchParams.get('path') || '').includes('proxyip=ProxyIP.FRA.CMLiussss.net:443')) &&
+      placementTls.every(l => decodeURIComponent(String(l).split('#')[1] || '').includes('[Placement: FRA]')) &&
+      placementTls.every(l => decodeURIComponent(String(l).split('#')[1] || '').includes('🇩🇪 DE')),
+    decodeURIComponent(String(placementTls[0] || '').split('#')[1] || '')
+  );
+
+  const multi = await build({
+    sb: 'yes', placement: 'auto', proxyMode: 'multi_cmliu',
+    proxyMultiRegions: 'DE,NL,IAD,BPB', p: ''
+  });
+  const multiPaths = multi.map(l => parseLink(l).searchParams.get('path') || '').join('\n');
+  check(
+    'مولتی‌لوکیشن CMLiu — DE/NL/IAD/BPB در مسیرها',
+    ['ProxyIP.DE.CMLiussss.net:443', 'ProxyIP.NL.CMLiussss.net:443', 'ProxyIP.IAD.CMLiussss.net:443', 'bpb.yousef.isegaro.com:443'].every(host => multiPaths.includes(host))
+  );
+
+  const manualProxy = await build({
+    sb: 'yes', proxyMode: 'manual_proxyip', ports: '2053', httpPorts: '8080',
+    ena: 'no', epi: 'yes', yxby: 'no',
+    yx: '104.16.0.20:2053#a,104.16.0.21:2053#b',
+    p: 'ProxyIP.DE.CMLiussss.net:443,ProxyIP.NL.CMLiussss.net:443'
+  });
+  const manualPaths = manualProxy.map(l => parseLink(l).searchParams.get('path') || '').join('\n');
+  check(
+    'ProxyIP دستی چندتایی — هر دو مقصد در ساب',
+    manualPaths.includes('ProxyIP.DE.CMLiussss.net:443') && manualPaths.includes('ProxyIP.NL.CMLiussss.net:443')
+  );
+
+  const xhttpProxy = await build({ ex: 'yes', et: 'no', es: 'no', sb: 'yes', placement: 'manual_placement:AMS', proxyMode: 'sync_placement' });
+  const xhttpLink = xhttpProxy.find(l => String(l).includes('type=xhttp'));
+  check(
+    'xHTTP — proxyip و ed در مسیر',
+    Boolean(xhttpLink) &&
+      (parseLink(xhttpLink).searchParams.get('path') || '').includes('proxyip=ProxyIP.AMS.CMLiussss.net:443') &&
+      (parseLink(xhttpLink).searchParams.get('path') || '').includes('ed=2048')
+  );
 }
 
 // ۳) منطقه و آدرس دستی
@@ -155,9 +204,26 @@ function check(name, pass, detail = '') {
     [...selectedPorts].join(',')
   );
 
-  // منطقهٔ ذخیره‌شده باید بدون ?country هم مسیر خروج را عوض کند.
-  const region = await build({ region: 'DE', sb: 'no', ena: 'yes', epi: 'no', epd: 'no', egi: 'no', yxby: 'yes', yx: '', p: '' });
-  check('منطقهٔ خروجی روی نودها', region.some(l => String(parseLink(l).searchParams.get('path') || '').includes('p=ProxyIP.DE.CMLiussss.net:443')));
+  // حالت خودکار (subNodeCount=0) نباید هیچ سقف ثابتی داشته باشد و تعداد نود
+  // باید با تعداد پورت‌های انتخابی بالا برود؛ یک آدرس و یک پروتکل، بدون WARP.
+  const autoManual = { ena: 'no', epi: 'yes', yxby: 'no', yx: '104.16.0.20:443#one' };
+  const autoOne = await build({ ...autoManual, ports: '443', httpPorts: '' });
+  const autoSix = await build({ ...autoManual, ports: '443,2053,2083', httpPorts: '80,8080,8880' });
+  check(
+    'حالت خودکار — تعداد نود متناسب با پورت‌های انتخابی',
+    autoOne.length === 1 && autoSix.length === 6 && autoSix.length === autoOne.length * 6,
+    `${autoOne.length} → ${autoSix.length}`
+  );
+
+  // Placement فقط مسیر/نام را عوض می‌کند و منبع Address دست‌نخورده می‌ماند.
+  const placementAddresses = await build({
+    placement: 'manual_placement:FRA', proxyMode: 'multi_cmliu', proxyMultiRegions: 'DE,NL',
+    ena: 'no', epi: 'yes', yxby: 'no', yx: '104.16.0.20:2053#آلمان', p: '', sb: 'yes'
+  });
+  check(
+    'Placement/ProxyIP آدرس دستی را تغییر نمی‌دهد',
+    placementAddresses.some(l => parseLink(l).hostname === '104.16.0.20' && parseLink(l).port === '2053')
+  );
 }
 
 // ۳-ب) ضد فیلتر خودکار برای دامنهٔ فیلترشدهٔ Cloudflare Pages (*.pages.dev) در ایران

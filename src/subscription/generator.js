@@ -13,6 +13,7 @@ import {
   DIRECT_DOMAINS,
   FALLBACK_PROXY_IPS,
   FRAGMENT_PRESETS,
+  MULTI_PLACEMENT_COLOS,
   OFFICIAL_DIRECT_IPS,
   OFFICIAL_DIRECT_IPV6,
   OPENVPN_CSV_SOURCES,
@@ -29,10 +30,17 @@ import {
   WARP_PEER_PUBLIC_KEY,
   WARP_REGISTRATION_URL,
   WARP_CLIENT_VERSION,
+  getPlacementRegion,
+  getProxyIpRegion,
   isEnabledValue,
   normalizeAlpn,
   normalizeEffectiveConfig,
-  parseNodePorts
+  normalizePlacementValue,
+  normalizeProxyMode,
+  normalizeProxyMultiRegions,
+  normalizeProxyRegion,
+  parseNodePorts,
+  proxyIpHostForCode
 } from '../config/defaults.js';
 import {
   addressFamilyLabel,
@@ -146,6 +154,104 @@ export function buildEchParamValue(cfg = {}) {
   return `${echDomain}+${dnsVal}`;
 }
 
+// فهرست مقصدهای ProxyIP را از مقدار متنی (تک یا چندتایی) جدا می‌کند.
+function splitProxyIpList(value = '') {
+  return String(value || '')
+    .split(/[,\n;،]+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function proxyMetaFromHost(value = '') {
+  const host = String(value || '').trim();
+  if (!host || /^auto$/i.test(host)) return { code: 'AUTO', cc: '', flag: '⚡' };
+  const match = host.match(/(?:^|[.])proxyip\.([a-z0-9]+)\.cmliussss\.net/i);
+  const item = match ? getProxyIpRegion(match[1]) : null;
+  if (item) return { code: item.code, cc: item.country, flag: item.flag };
+  if (/bpb\./i.test(host)) return { code: 'BPB', cc: '', flag: '🛡️' };
+  return { code: 'CUSTOM', cc: '', flag: '🔗' };
+}
+
+function activeColo(value = '') {
+  const clean = String(value || '').trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(clean) ? clean : '';
+}
+
+// یک برنامهٔ مسیریابی برای هر ساب می‌سازد: لیست Placementها (برای Remark)
+// و لیست مقصدهای ProxyIP (برای مسیر). آدرس نود/استخر ۶۹۶ کاملاً جدا می‌ماند.
+export function buildNodeRoutingPlan(cfg = {}, requestColo = '') {
+  const placement = normalizePlacementValue(cfg.placement, cfg.placementColo);
+  const colo = activeColo(requestColo);
+  let placements = [];
+  if (placement.mode === 'manual_placement') {
+    placements = [{ colo: placement.colo, country: placement.region.country, flag: placement.region.flag, auto: false }];
+  } else if (placement.mode === 'multi_placement') {
+    placements = MULTI_PLACEMENT_COLOS.map(code => {
+      const region = getPlacementRegion(code);
+      return region ? { colo: region.colo, country: region.country, flag: region.flag, auto: false } : null;
+    }).filter(Boolean);
+  } else {
+    const region = colo ? getPlacementRegion(colo) : null;
+    placements = [{ colo: '', country: region ? region.country : '', flag: region ? region.flag : '', auto: true, detectedColo: colo }];
+  }
+
+  let proxies = [];
+  if (cfg.sb === 'yes') {
+    const mode = normalizeProxyMode(cfg.proxyMode);
+    if (mode === 'sync_placement') {
+      if (placement.mode === 'auto') {
+        const region = colo ? getPlacementRegion(colo) : null;
+        proxies = [{
+          host: 'auto',
+          code: 'AUTO',
+          cc: region ? region.country : '',
+          flag: region ? region.flag : '⚡'
+        }];
+      } else {
+        proxies = placements.map(slot => ({
+          // طبق قرارداد درخواستی، حالت sync از خود کد Colo استفاده می‌کند.
+          host: `ProxyIP.${slot.colo}.CMLiussss.net:443`,
+          code: slot.country,
+          cc: slot.country,
+          flag: slot.flag
+        }));
+      }
+    } else if (mode === 'multi_cmliu') {
+      const codes = normalizeProxyMultiRegions(cfg.proxyMultiRegions).split(',');
+      proxies = codes.map(code => {
+        const item = getProxyIpRegion(code);
+        if (!item) return null;
+        return { host: proxyIpHostForCode(item.code), code: item.code, cc: item.country, flag: item.flag };
+      }).filter(Boolean);
+    } else {
+      const custom = splitProxyIpList(cfg.p);
+      if (custom.length) {
+        proxies = custom.map(value => {
+          const meta = proxyMetaFromHost(value);
+          return { host: value, code: meta.code, cc: meta.cc, flag: meta.flag };
+        });
+      } else {
+        const item = getProxyIpRegion(normalizeProxyRegion(cfg.proxyRegion || cfg.sbRegion));
+        if (item) proxies = [{ host: proxyIpHostForCode(item.code), code: item.code, cc: item.country, flag: item.flag }];
+      }
+    }
+  }
+  return { placement, placements, proxies };
+}
+
+function annotateRoutingItem(item, plan, index) {
+  const placement = plan.placements.length ? plan.placements[index % plan.placements.length] : null;
+  const proxy = (!item?.proxy && plan.proxies.length) ? plan.proxies[index % plan.proxies.length] : null;
+  return {
+    ...(item || {}),
+    placementColo: placement ? (placement.auto ? (placement.detectedColo || '') : placement.colo) : '',
+    proxyIp: proxy ? proxy.host : '',
+    proxyCode: proxy ? proxy.code : '',
+    proxyCc: proxy ? proxy.cc : '',
+    proxyFlag: proxy ? proxy.flag : ''
+  };
+}
+
 // مسیر یکتای هر نوع نود (vless/trojan/xhttp/ss) و هر کشور؛ ورکر به مسیر حساس نیست
 // و همین مسیر را در درخواست WebSocket می‌بیند، پس تفکیک مسیرها اتصال را خراب نمی‌کند.
 export function buildNodePath(proto, cfg = {}, wkOverride = '', item = null) {
@@ -162,9 +268,11 @@ export function buildNodePath(proto, cfg = {}, wkOverride = '', item = null) {
   const cc = String(item?.country || '').trim().toUpperCase();
   if (/^[A-Z]{2}$/.test(cc)) parts.push(`cc=${cc}`);
   if (item?.proxy) parts.push(`s=${encodeProxyForPath(item.proxy)}`);
-  // ProxyIP سفارشی/منطقه‌ای (cfnew: 回退地址) — ورکر با همین آدرس MTProto/سایت
-  // مقصد را باز می‌کند؛ آدرس نود همچنان آی‌پی ثابت است.
-  if (!item?.proxy && cfg.p) parts.push(`p=${encodeProxyForPath(cfg.p)}`);
+  // ProxyIP: مسیر تازه از نام proxyip استفاده می‌کند؛ ورکر برای سازگاری
+  // با لینک‌های قدیمی، p و proxy_ip را هم می‌خواند.
+  const proxyTarget = String(item?.proxyIp || (item?.proxy ? '' : cfg.p) || '').trim();
+  if (proxyTarget) parts.push(`proxyip=${encodeProxyForPath(proxyTarget)}`);
+  if (item?.placementColo) parts.push(`pl=${encodeURIComponent(item.placementColo)}`);
   return pathName + (parts.length ? '?' + parts.join('&') : '');
 }
 
@@ -188,9 +296,9 @@ export function buildFragmentValue(cfg = {}) {
   return `${length},${interval},${packets || 'tlshello'}`;
 }
 
-// همه حالت‌های پورت یک آدرس: یک پورت TLS + یک پورت HTTP (اگر تنظیم شده باشد).
-// با همین، هر آدرس/کشور هم نسخهٔ TLS و هم نسخهٔ بدون TLS دارد و اگر یکی در
-// شبکهٔ کاربر فیلتر باشد دیگری کار می‌کند.
+// همه حالت‌های پورت یک آدرس: تمام پورت‌های TLS و HTTP انتخاب‌شده.
+// بنابراین تعداد نودهای هر آدرس/پروتکل با تعداد پورت‌های انتخابی بالا می‌رود،
+// نه با یک سقف ثابت.
 export function buildPortVariants(cfg = {}, item = {}, index = 0) {
   const disableNonTls = cfg.dkby === 'yes';
   // پورت آدرس‌های ترجیحی/مخزن فقط یک تزریق پیش‌فرض است؛ انتخاب کاربر در
@@ -203,8 +311,8 @@ export function buildPortVariants(cfg = {}, item = {}, index = 0) {
   const httpPorts = disableNonTls ? [] : parseNodePorts(cfg.httpPorts || '')
     .filter(port => CF_HTTP_PORTS.includes(port));
   const out = [];
-  if (tlsPorts.length) out.push({ port: tlsPorts[Math.abs(index) % tlsPorts.length], tls: true });
-  if (httpPorts.length) out.push({ port: httpPorts[Math.abs(index) % httpPorts.length], tls: false });
+  for (const port of tlsPorts) out.push({ port, tls: true });
+  for (const port of httpPorts) out.push({ port, tls: false });
   return out.length ? out : [{ port: 443, tls: true }];
 }
 
@@ -226,12 +334,17 @@ function interleaveAddresses(ipNodes = [], domainNodes = []) {
 // ساخت یک ورودی نود همراه با فرادادهٔ لازم برای نام‌گذاری و توزیع مساوی
 function makeNodeEntry(link, proto, host, item = null, tls = true) {
   const cc = String(item?.country || '').trim().toUpperCase();
+  const proxyCc = String(item?.proxyCc || '').trim().toUpperCase();
   const meta = {
     proto,
     host,
     family: addressFamilyLabel(host),
     cc: /^[A-Z]{2}$/.test(cc) ? cc : '',
-    proxy: Boolean(item?.proxy),
+    proxy: Boolean(item?.proxy || item?.proxyIp),
+    proxyCc: /^[A-Z]{2}$/.test(proxyCc) ? proxyCc : '',
+    proxyCode: String(item?.proxyCode || '').trim(),
+    proxyFlag: String(item?.proxyFlag || '').trim(),
+    placementColo: String(item?.placementColo || '').trim().toUpperCase(),
     tls: tls !== false
   };
   return { link, meta };
@@ -259,8 +372,23 @@ function balanceComboEntries(entries = [], limit = 0) {
   for (const [key, list] of groups) {
     // ترتیب پایدار: مستقل از ترتیب رسیدن منابع، تا لینک‌ها بین دو درخواست
     // جابه‌جا نشوند (آی‌پی نود در کلاینت ثابت می‌ماند).
-    const withProxy = list.filter(item => item.meta.proxy)
+    const withProxySorted = list.filter(item => item.meta.proxy)
       .sort((a, b) => stableAddressSeed(String(a.link)) - stableAddressSeed(String(b.link)) || String(a.link).localeCompare(String(b.link)));
+    // هر مقصد ProxyIP را حداقل یک بار در ابتدای صف نگه می‌داریم؛ وگرنه
+    // سقف نود کاربر می‌تواند یک کشور را کامل از ساب حذف کند.
+    const proxyBuckets = new Map();
+    for (const item of withProxySorted) {
+      const code = String(item.meta.proxyCode || 'proxy');
+      if (!proxyBuckets.has(code)) proxyBuckets.set(code, []);
+      proxyBuckets.get(code).push(item);
+    }
+    const withProxy = [];
+    while (proxyBuckets.size) {
+      for (const [code, bucket] of proxyBuckets) {
+        if (bucket.length) withProxy.push(bucket.shift());
+        else proxyBuckets.delete(code);
+      }
+    }
     const plain = list.filter(item => !item.meta.proxy)
       .sort((a, b) => stableAddressSeed(String(a.link)) - stableAddressSeed(String(b.link)) || String(a.link).localeCompare(String(b.link)));
     const mixed = [];
@@ -898,14 +1026,18 @@ export function buildShadowsocksLinks(list, userUuid, workerHost, cfg) {
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    // شادوساکس با پلاگین v2ray فقط روی TLS معنا دارد؛ همیشه نسخهٔ TLS انتخاب می‌شود
-    const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
+    // شادوساکس با پلاگین v2ray فقط روی TLS معنا دارد؛ همهٔ پورت‌های TLS
+    // انتخاب‌شده برای این پروتکل هم ساخته می‌شوند.
+    const ssTlsPorts = buildPortVariants(cfg, item, idx).filter(variant => variant.tls);
+    const ssPorts = ssTlsPorts.length ? ssTlsPorts : [{ port: 443, tls: true }];
     const nodeName = buildNodeDisplayName({ proto: 'ss', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     const itemPath = buildNodePath('ss', cfg, '', item);
     const pluginOpts = `v2ray-plugin;mode=websocket;host=${frontHostFor(item, workerHost)};path=${itemPath};tls`;
-    links.push(
-      makeNodeEntry(`ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
-    );
+    for (const { port } of ssPorts) {
+      links.push(
+        makeNodeEntry(`ss://${userinfo}@${safeAddr}:${port}/?plugin=${encodeURIComponent(pluginOpts)}#${encodeURIComponent(nodeName)}`, 'ss', rawHost, item, true)
+      );
+    }
   }
   return links;
 }
@@ -995,39 +1127,45 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg) {
     const rawHost = normalizeNodeHost(item.ip || item.domain);
     if (!rawHost) continue;
     const safeAddr = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
-    const { port } = buildPortVariants(cfg, item, idx).find(variant => variant.tls) || { port: 443 };
+    const xhttpTlsPorts = buildPortVariants(cfg, item, idx).filter(variant => variant.tls);
+    const xhttpPorts = xhttpTlsPorts.length ? xhttpTlsPorts : [{ port: 443, tls: true }];
     const nodeName = buildNodeDisplayName({ proto: 'xhttp', host: rawHost, cc: item?.country, proxy: Boolean(item?.proxy), tls: true });
     // مسیر یکتای xHTTP + کشور + پروکسی خروجی
-    let xhttpPath = `/${shortPath}?nt=xhttp`;
+    let xhttpPath = `/${shortPath}?ed=2048&nt=xhttp`;
     const xhttpCountry = String(item.country || '').trim().toUpperCase();
     if (/^[A-Z]{2}$/.test(xhttpCountry)) xhttpPath += `&cc=${xhttpCountry}`;
     if (item.proxy) xhttpPath += `&s=${encodeProxyForPath(item.proxy)}`;
+    const xhttpProxyTarget = String(item.proxyIp || (item.proxy ? '' : cfg.p) || '').trim();
+    if (xhttpProxyTarget) xhttpPath += `&proxyip=${encodeProxyForPath(xhttpProxyTarget)}`;
+    if (item.placementColo) xhttpPath += `&pl=${encodeURIComponent(item.placementColo)}`;
     const nodeHost = frontHostFor(item, workerHost);
     const effectiveSni = getEffectiveSniForNode(nodeHost, rawHost, idx);
-    const params = new URLSearchParams({
-      encryption: 'none',
-      security: 'tls',
-      sni: effectiveSni,
-      fp: cfg.fp || 'random',
-      type: 'xhttp',
-      host: nodeHost,
-      path: xhttpPath,
-      mode: 'stream-one'
-    });
-    params.set(
-      'extra',
-      JSON.stringify({
-        xPaddingObfsMode: true,
-        xPaddingMethod: 'tokenish',
-        xPaddingPlacement: 'queryInHeader',
-        xPaddingHeader: xPadHeader,
-        xPaddingKey: xPadKey
-      })
-    );
-    if (alpn) params.set('alpn', alpn);
-    if (echValue) params.set('ech', echValue);
-    if (fragmentValue) params.set('fragment', fragmentValue);
-    links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'xhttp', rawHost, item, true));
+    for (const { port } of xhttpPorts) {
+      const params = new URLSearchParams({
+        encryption: 'none',
+        security: 'tls',
+        sni: effectiveSni,
+        fp: cfg.fp || 'random',
+        type: 'xhttp',
+        host: nodeHost,
+        path: xhttpPath,
+        mode: 'stream-one'
+      });
+      params.set(
+        'extra',
+        JSON.stringify({
+          xPaddingObfsMode: true,
+          xPaddingMethod: 'tokenish',
+          xPaddingPlacement: 'queryInHeader',
+          xPaddingHeader: xPadHeader,
+          xPaddingKey: xPadKey
+        })
+      );
+      if (alpn) params.set('alpn', alpn);
+      if (echValue) params.set('ech', echValue);
+      if (fragmentValue) params.set('fragment', fragmentValue);
+      links.push(makeNodeEntry(`vless://${userUuid}@${safeAddr}:${port}?${params.toString()}#${encodeURIComponent(nodeName)}`, 'xhttp', rawHost, item, true));
+    }
   }
   return links;
 }
@@ -2355,7 +2493,7 @@ function buildNodesCacheKey(workerHost, userOrConfig, cfg, overrides = {}, epoch
   const uuid = String(userOrConfig?.uuid || overrides.uuid || 'default').toLowerCase();
   const params = [
     overrides.set || '', overrides.country || '', overrides.region || '',
-    overrides.proto || '', overrides.limit === undefined ? '' : String(overrides.limit),
+    overrides.colo || '', overrides.proto || '', overrides.limit === undefined ? '' : String(overrides.limit),
     overrides.wk || '', overrides.scope || userOrConfig?.nodeScope || 'all',
     overrides.nowarp || '',
     userOrConfig?.subNodeCount === undefined ? '' : String(userOrConfig.subNodeCount)
@@ -2410,23 +2548,9 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   // فقط نودهای دامنه‌محور می‌سازد و از استخر آی‌پی/کشوری/WARP استفاده نمی‌کند.
   const setParam = String(queryOverrides.set || '').trim().toLowerCase();
   const domainMode = setParam === 'domain';
-  // منطقهٔ انتخابی کاربر/لوکیشن (region) — در نبود ?country از همین استفاده می‌شود
-  const regionCode = String(queryOverrides.region || cfg.region || 'auto').trim().toUpperCase();
-  const regionFilter = /^[A-Z]{2}$/.test(regionCode) && regionCode !== 'AUTO' && regionCode !== 'CF'
-    ? regionCode
-    : '';
   // ساب‌لینک اختصاصی «فقط IPv6» برای شبکهٔ همراه اول: ?set=ipv6
   // (همراهاول روی IPv6 عملکرد بهتری دارد؛ این ساب هیچ نود IPv4/دامنه ندارد.)
   const ipv6Mode = setParam === 'ipv6' || setParam === 'ipv6-mci' || setParam === 'mci';
-
-  // اولویت آدرس واسط: مقدار صریح کاربر → منطقهٔ انتخابی → پیش‌فرض تحریم‌شکن
-  const explicitProxy = String(rawCfg.p || '').trim();
-  if (!explicitProxy && regionFilter) {
-    cfg.p = `ProxyIP.${regionFilter}.CMLiussss.net:443`;
-  }
-  if (!String(cfg.p || '').trim() && cfg.sb === 'yes') {
-    cfg.p = resolveSanctionsProxy(cfg, userUuid);
-  }
 
   if (ipv6Mode) {
     // فقط آی‌پی نسخه ۶؛ دامنه محور/لیست ترجیحی/سرور اصلی/چندلوکیشن کنار گذاشته می‌شوند
@@ -2492,15 +2616,33 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     sniHosts: String(cfg.sniHosts || '').trim() ? cfg.sniHosts : globalSniHosts
   });
   let frontCursor = 0;
+  let routingCursor = 0;
+  // Placement/ProxyIP فقط مسیر و نام نودها را عوض می‌کند؛ منبع Address همچنان
+  // از همان استخر ۶۹۶ آی‌پی یا آدرس‌های دستی می‌آید و دست نمی‌خورد.
+  const routingPlan = buildNodeRoutingPlan(cfg, queryOverrides.colo || '');
 
   function appendFromSource(sourceList) {
     // فیدهای عمومی SOCKS/HTTP می‌توانند هزاران خط برگردانند؛ سقف امنیتي
     // از پرش حافظه/Stack Overflow در ساخت لینک‌ها جلوگیری می‌کند.
     const safeList = filterAddressFamily(sourceList, cfg).slice(0, 160);
     if (!Array.isArray(safeList) || safeList.length === 0) return;
-    const decorated = frontHosts.length > 1
-      ? safeList.map(item => ({ ...item, frontHost: frontHosts[(frontCursor++) % frontHosts.length] }))
-      : safeList;
+    // در حالت‌های چندلوکیشن (Placement یا ProxyIP) برای هر آدرس به تعداد
+    // منطقه‌های انتخاب‌شده نود مجزا می‌سازیم تا همهٔ کشورها/Coloها در ساب
+    // حاضر باشند. Address همان آی‌پی/دامنهٔ قبلی است و دست نمی‌خورد.
+    const fanout = Math.max(
+      routingPlan.placement.mode === 'multi_placement' ? routingPlan.placements.length : 1,
+      cfg.sb === 'yes' && normalizeProxyMode(cfg.proxyMode) === 'multi_cmliu' ? routingPlan.proxies.length : 1,
+      1
+    );
+    const decorated = [];
+    safeList.forEach(item => {
+      const withFront = frontHosts.length > 1
+        ? { ...item, frontHost: frontHosts[(frontCursor++) % frontHosts.length] }
+        : item;
+      for (let slot = 0; slot < fanout; slot++) {
+        decorated.push(annotateRoutingItem(withFront, routingPlan, routingCursor++));
+      }
+    });
     if (evEnabled) protoGroups.vless.push(...buildVlessLinks(decorated, userUuid, workerHost, cfg, wkOverride));
     if (etEnabled) protoGroups.trojan.push(...buildTrojanLinks(decorated, userUuid, workerHost, cfg, wkOverride));
     if (exEnabled) protoGroups.xhttp.push(...buildXhttpLinks(decorated, userUuid, workerHost, cfg));
@@ -2548,7 +2690,9 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   let countryMode = false;
   // منطقهٔ ذخیره‌شدهٔ کاربر هم باید مثل ?country عمل کند؛ قبلاً فقط برای
   // ساختن ProxyIP استفاده می‌شد و تب «منطقه» روی کشور نودها اثر کامل نداشت.
-  const countryFilter = fixedIpMode ? '' : String(queryOverrides.country || regionFilter || '').trim().toUpperCase();
+  // ?country= همچنان ساب لوکیشن صریح می‌سازد؛ Placement و منطقهٔ خروجی دیگر
+  // استخر آدرس را عوض نمی‌کنند و فقط مسیر/نام نود را کنترل می‌کنند.
+  const countryFilter = fixedIpMode ? '' : String(queryOverrides.country || '').trim().toUpperCase();
   if (!domainMode && !ipv6Mode && !fixedIpMode && countryFilter) {
     const wantedCountries = countryFilter === 'MULTI' || countryFilter === 'ALL'
       ? MULTI_COUNTRY_CODES.slice()
@@ -2910,6 +3054,7 @@ export async function handleSubscriptionResponse(request, userOrConfig, url = nu
 
   const queryOverrides = {
     wk: url.searchParams.get('wk') || '',
+    colo: String(request.cf?.colo || '').toUpperCase(),
     proto: url.searchParams.get('proto') || '',
     country: url.searchParams.get('country') || '',
     verify: url.searchParams.get('verify') || '',
