@@ -41,7 +41,7 @@ globalThis.fetch = async (url) => {
 
 const { generateUserNodesList, parseOpenVpnList, buildOvpnVariant, resolveOvpnTuningPresets } = await import('../src/subscription/generator.js');
 const { generateClashConfig, generateSingboxConfig } = await import('../src/subscription/converters.js');
-const { CONFIG_DEFAULTS, MAX_SUB_NODE_COUNT, resolveProxyIpValue } = await import('../src/config/defaults.js');
+const { CONFIG_DEFAULTS, MAX_SUB_NODE_COUNT, normalizePlacementValue, resolveProxyIpValue } = await import('../src/config/defaults.js');
 
 const WORKER = 'panel.example.com';
 const UUID = '351c9981-04b6-4103-aa4b-864aa9c01469';
@@ -153,6 +153,16 @@ check(
     autoColoTls.length > 0 && autoColoTls.every(l => decodeURIComponent(String(l).split('#')[1] || '').includes('[Placement: AMS]'))
   );
 
+  const placementOff = await build({ sb: 'yes', placement: 'off', proxyMode: 'sync_placement', p: '' });
+  const placementOffPaths = placementOff.map(l => parseLink(l).searchParams.get('path') || '');
+  check(
+    'Placement خاموش — بدون pl و بدون اجبار ProxyIP',
+    normalizePlacementValue('off').mode === 'off' &&
+      placementOff.length > 0 &&
+      placementOffPaths.every(path => !path.includes('pl=') && !path.includes('proxyip=')),
+    placementOffPaths[0] || ''
+  );
+
   const placement = await build({ sb: 'yes', placement: 'manual_placement:FRA', proxyMode: 'sync_placement', p: '' });
   const placementTls = tlsOnly(placement);
   check(
@@ -172,6 +182,28 @@ check(
   check(
     'مولتی‌لوکیشن CMLiu — DE/NL/IAD/BPB در مسیرها',
     ['ProxyIP.DE.CMLiussss.net:443', 'ProxyIP.NL.CMLiussss.net:443', 'ProxyIP.US.CMLiussss.net:443', 'bpb.yousef.isegaro.com:443'].every(host => multiPaths.includes(host))
+  );
+
+  const realMulti = await build({
+    sb: 'yes', placement: 'off', proxyMode: 'multi_cmliu',
+    proxyMultiRegions: 'DE,NL,GB,US,JP', p: ''
+  });
+  const realMultiPathList = realMulti.map(l => parseLink(l).searchParams.get('path') || '');
+  const realMultiPaths = realMultiPathList.join('\n');
+  check(
+    'مولتی‌لوکیشن واقعی — هر کشور در ProxyIP مسیر، بدون pl',
+    ['ProxyIP.DE.CMLiussss.net:443', 'ProxyIP.NL.CMLiussss.net:443', 'ProxyIP.GB.CMLiussss.net:443', 'ProxyIP.US.CMLiussss.net:443', 'ProxyIP.JP.CMLiussss.net:443'].every(host => realMultiPaths.includes(host)) &&
+      realMulti.every(l => !String(parseLink(l).searchParams.get('path') || '').includes('pl=')),
+    realMultiPathList.slice(0, 3).join(' | ')
+  );
+
+  check(
+    'آدرس نود از ProxyIP دستی جدا می‌ماند',
+    (await build({
+      ena: 'no', epi: 'yes', epd: 'no', egi: 'no', yxby: 'no',
+      yx: 'ProxyIP.DE.CMLiussss.net:443#proxy', ports: '443', httpPorts: ''
+    })).every(l => !String(parseLink(l).hostname).toLowerCase().includes('cmliussss')),
+    'ProxyIP فقط در path استفاده می‌شود'
   );
 
   const manualProxy = await build({

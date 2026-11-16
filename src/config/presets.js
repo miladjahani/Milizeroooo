@@ -125,10 +125,9 @@ export function buildRandomUserAddressMix(options = {}) {
   const autoYx = [
     ...ipv4.map(item => `${item.host}#${item.label}`),
     ...ipv6.map(host => `[${host}]#IPv6`),
-    ...domains.map(item => `${item.host}#${item.label}`),
-    // دامنه‌های ProxyIP به‌عنوان آدرس نود (نه پروکسی HTTP) وارد می‌شوند؛
-    // این دامنه‌ها روی لبهٔ کلادفلر resolve می‌شوند و مسیر p= را خراب نمی‌کنند.
-    ...proxyIps.map(item => `${item.host}#ProxyIP-${item.label}`)
+    ...domains.map(item => `${item.host}#${item.label}`)
+    // دامنه‌های ProxyIP عمداً در Address نود قرار نمی‌گیرند؛ فقط مقصد مسیر
+    // (proxyip= در path) هستند و Address باید یک آدرس واقعی برای پینگ باشد.
   ];
   const seenYx = new Set();
   const yx = [...manualYx, ...autoYx].filter(line => {
@@ -324,9 +323,9 @@ export const USER_PRESETS = {
   },
   'multi-location': {
     id: 'multi-location',
-    title: 'چند لوکیشن — فقط نودهای لبه و VIP',
-    subtitle: 'لوکیشن‌های تفکیک‌شده آلمان، هلند، آمریکا و...',
-    badges: ['۶ کشور از مخزن', 'VLESS + Trojan + SS', 'WARP چندلوکیشن'],
+    title: 'چند لوکیشن واقعی — ProxyIP',
+    subtitle: 'خروجی هر نود از کشور خودش؛ آدرس نود فقط برای پینگ',
+    badges: ['۱۲ خروجی واقعی', 'VLESS + Trojan + SS', 'Placement خاموش'],
     recommended: false,
     nodeScope: 'all',
     subNodeCount: 0,
@@ -357,12 +356,14 @@ export const USER_PRESETS = {
       ipv6: 'yes',
       sb: 'yes',
       sbRegion: 'DE',
-      proxyMode: 'manual_proxyip',
+      placement: 'off',
+      proxyMode: 'multi_cmliu',
       proxyRegion: 'DE',
-      ipRotation: '15m',
-      warp: 'yes',
-      warpMl: 'yes',
-      warpCount: '6',
+      proxyMultiRegions: 'DE,NL,UK,FR,FI,SE,CH,SG,JP,KR,HK,IAD',
+      ipRotation: 'off',
+      warp: 'no',
+      warpMl: 'no',
+      warpCount: '0',
       tcp: 'yes',
       udp: 'yes'
     }

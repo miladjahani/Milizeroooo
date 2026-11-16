@@ -3687,7 +3687,7 @@ ${PWA_HEAD_TAGS}
             <button class="preset-orb-btn orb-iran-fast" type="button" data-act="quick-preset-user" data-preset="iran-fast" title="ساخت سریع کاربر: ایران سریع — فرگمنت MCI، خروجی آلمان، ۳ دستگاه" aria-label="ایران سریع">${icon('bolt')}</button>
             <button class="preset-orb-btn orb-pages-iran" type="button" data-act="quick-preset-user" data-preset="pages-iran" title="ساخت سریع کاربر: Pages.dev — xHTTP + ECH، فرگمنت Anti-DPI، خروجی هلند" aria-label="Pages ضد فیلتر">${icon('shield')}</button>
             <button class="preset-orb-btn orb-iran-heavy" type="button" data-act="quick-preset-user" data-preset="iran-heavy" title="ساخت سریع کاربر: مصرف سنگین — VLESS + Trojan، فرگمنت ایرانسل، خروجی ترکیه" aria-label="مصرف سنگین">${icon('lock')}</button>
-            <button class="preset-orb-btn orb-multi" type="button" data-act="quick-preset-user" data-preset="multi-location" title="ساخت سریع کاربر: چندلوکیشن — ۶ کشور از مخزن، VLESS + Trojan + SS، WARP" aria-label="چندلوکیشن">${icon('globe')}</button>
+            <button class="preset-orb-btn orb-multi" type="button" data-act="quick-preset-user" data-preset="multi-location" title="ساخت سریع کاربر: چندلوکیشن واقعی — خروجی هر نود از ProxyIP کشور خودش، VLESS + Trojan + SS" aria-label="چندلوکیشن واقعی">${icon('globe')}</button>
             <button class="preset-orb-btn orb-intl" type="button" data-act="quick-preset-user" data-preset="international" title="ساخت سریع کاربر: بین‌المللی — بدون فرگمنت، WARP MASQUE، خروجی مستقیم" aria-label="بین‌المللی">${icon('signal')}</button>
             <button class="preset-orb-btn orb-tg-proxy" type="button" data-act="open-tg-proxy" title="مدیریت پروکسی تلگرام (وب‌پروکسی)" aria-label="پروکسی تلگرام">${icon('telegram')}</button>
           </div>
@@ -5538,8 +5538,8 @@ ${PWA_HEAD_TAGS}
         { key: 'alpn', section: 'امنیت', label: 'پروتکل‌های لایهٔ انتقال (ALPN)', type: 'select', def: '', options: [['', 'خودکار'], ['h2,http/1.1', 'h2 + http/1.1'], ['h3,h2,http/1.1', 'h3 + h2 + http/1.1']] },
         { key: 'fp', section: 'امنیت', label: 'اثر انگشت TLS', type: 'select', def: 'chrome', options: 'fingerprints' },
         { key: 'patt', section: 'انتقال و فرگمنت', label: 'مسیر WebSocket', type: 'select', def: '/?ed=2048', options: 'pathPatterns' },
-        { key: 'ports', section: 'انتقال و فرگمنت', label: 'پورت‌های امن (TLS)', type: 'portChips', tls: true, def: '443,2053,2083', hint: 'حداقل ۳ پورت از فهرست HTTPS کلادفلر؛ همین پورت‌ها روی همهٔ نودها اعمال می‌شوند.' },
-        { key: 'httpPorts', section: 'انتقال و فرگمنت', label: 'پورت‌های HTTP', type: 'portChips', tls: false, def: '80,8080,8880', hint: 'حداقل ۳ پورت HTTP؛ برای هر آدرس علاوه بر نسخهٔ TLS یک نسخهٔ HTTP هم ساخته می‌شود.' },
+        { key: 'ports', section: 'انتقال و فرگمنت', label: 'پورت‌های امن (TLS)', type: 'portChips', tls: true, def: '443,2053,2083', hint: 'هر تعداد از پورت‌های رسمی TLS کلادفلر؛ انتخاب شما دست‌نخورده ذخیره و روی همهٔ نودها اعمال می‌شود.' },
+        { key: 'httpPorts', section: 'انتقال و فرگمنت', label: 'پورت‌های HTTP', type: 'portChips', tls: false, def: '80,8080,8880', hint: 'اختیاری؛ اگر همه را پاک کنید فقط نودهای TLS ساخته می‌شوند و مقدار خالی ذخیره می‌شود.' },
         { key: 'tcp', section: 'انتقال و فرگمنت', label: 'TCP سریع', hint: 'tcp-concurrent و tcp-fast-open در کانفیگ کلاینت', type: 'switch', def: 'yes' },
         { key: 'udp', section: 'انتقال و فرگمنت', label: 'عبور UDP', hint: 'نودها UDP را عبور می‌دهند (بازی و تماس)', type: 'switch', def: 'yes' },
         { key: 'frag', section: 'انتقال و فرگمنت', label: 'فرگمنت TLS', type: 'switch', def: 'yes' },
@@ -5560,9 +5560,9 @@ ${PWA_HEAD_TAGS}
         { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 4, wide: true, def: '', pool: true, ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
         { key: 'yxURL', section: 'آدرس‌های دستی', label: 'منبع آنلاین آدرس‌ها', type: 'text', wide: true, def: '', list: 'dlYxUrl', ph: 'https://... (چند نشانی را با کاما جدا کنید)' },
         { key: 'sb', section: 'مسیر خروج', label: 'تحریم‌شکن (خروجی از آدرس واسط)', hint: 'همهٔ نودها از یک آدرس بیرون از ایران خارج می‌شوند تا سرویس‌های مسدود برای آی‌پی ایران باز شوند', type: 'switch', def: 'yes' },
-        { key: 'proxyMode', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'sync_placement', options: [['sync_placement', '⚡ خودکار (هماهنگ با منطقهٔ Placement بالا)'], ['multi_cmliu', '🌍 مولتی‌لوکیشن (همه کشورها در ساب)'], ['manual_proxyip', '📍 تک‌کشور / دستی']], showWhenSwitch: 'sb', hint: 'در حالت خودکار، Colo همان درخواست یا Placement انتخاب‌شده به‌صورت داینامیک به ProxyIP تبدیل می‌شود.' },
+        { key: 'proxyMode', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'sync_placement', options: [['sync_placement', '⚡ خودکار (هماهنگ با منطقهٔ Placement بالا)'], ['multi_cmliu', '🌍 مولتی‌لوکیشن واقعی (هر کشور یک خروجی)'], ['manual_proxyip', '📍 تک‌کشور / دستی']], showWhenSwitch: 'sb', hint: 'در حالت خودکار، Colo همان درخواست به‌صورت داینامیک به ProxyIP تبدیل می‌شود؛ در حالت مولتی، هر نود ProxyIP کشور خودش را در مسیر دارد.' },
         { key: 'proxyRegion', section: 'مسیر خروج', label: 'کشور تحریم‌شکن (تک‌کشور)', type: 'select', def: 'DE', options: 'proxyRegions', showWhenSwitch: 'sb', showWhen: { key: 'proxyMode', equals: 'manual_proxyip' }, hint: 'با انتخاب کشور، کادر آدرس واسط به‌صورت خودکار پر می‌شود؛ می‌توانید بعداً آن را دستی تغییر دهید.' },
-        { key: 'proxyMultiRegions', section: 'مسیر خروج', label: 'کشورهای تحریم‌شکن (چندانتخابی)', type: 'regionMulti', wide: true, def: 'DE,NL,UK,FR,FI,PL,TR,IAD,LAX,CA,AE,SG,JP,KR,HK,Oracle,DigitalOcean,Vultr,BPB', showWhenSwitch: 'sb', showWhen: { key: 'proxyMode', equals: 'multi_cmliu' }, hint: 'برای هر کشور یک کانفیگ مجزا با ProxyIP همان کشور ساخته می‌شود.' },
+        { key: 'proxyMultiRegions', section: 'مسیر خروج', label: 'کشورهای تحریم‌شکن (چندانتخابی)', type: 'regionMulti', wide: true, def: 'DE,NL,UK,FR,FI,SE,CH,SG,JP,KR,HK,IAD,Oracle,BPB', showWhenSwitch: 'sb', showWhen: { key: 'proxyMode', equals: 'multi_cmliu' }, hint: 'برای هر کشور یک نود مجزا با ProxyIP همان کشور در مسیر ساخته می‌شود؛ Address نود فقط برای پینگ است.' },
         { key: 'p', section: 'مسیر خروج', label: 'آدرس واسط (ProxyIP)', type: 'text', def: '', list: 'dlProxyIp', ph: 'ProxyIP.DE.CMLiussss.net:443', showWhenSwitch: 'sb', hint: 'در حالت دستی می‌توانید یک یا چند دامنه/آی‌پی را با کاما وارد کنید؛ در حالت خودکار خالی بگذارید.' },
         { key: 's', section: 'مسیر خروج', label: 'پروکسی خروجی', type: 'text', def: '', list: 'dlProxy', ph: 'socks5://host:1080' }
       ]
@@ -5632,7 +5632,11 @@ ${PWA_HEAD_TAGS}
         Object.keys(srcs).sort().forEach(function(code) { pairs.push([code, srcs[code].name + ' — ' + code]); });
       }
       else if (list === 'placementRegions') {
-        pairs = [['auto', 'خودکار (بدون محدودیت منطقه)'], ['multi_placement', '🌍 مولتی‌لوکیشن Placement']];
+        pairs = [
+          ['auto', 'خودکار (بر اساس Colo اتصال)'],
+          ['off', '⏹ خاموش (بدون Placement و بدون pl در مسیر)'],
+          ['multi_placement', '🌍 مولتی‌لوکیشن واقعی (خروجی با ProxyIP)']
+        ];
         (INITIAL_DATA.placementRegions || []).forEach(function(region) {
           pairs.push(['manual_placement:' + region.colo, region.flag + ' ' + region.name + ' — ' + region.colo]);
         });
@@ -5736,8 +5740,9 @@ ${PWA_HEAD_TAGS}
 
   function placementTargetsHint(value) {
     var raw = String(value || 'auto');
+    if (raw === 'off') return '<span class="field-hint">هیچ پارامتر Placement یا <code>pl</code> در مسیر نودها قرار نمی‌گیرد؛ فقط تنظیمات مسیر/تحریم‌شکن اعمال می‌شود.</span>';
     if (raw === 'auto') return '<span class="field-hint">Colo در زمان اتصال از <code>request.cf.colo</code> خوانده می‌شود.</span>';
-    if (raw === 'multi_placement') return '<span class="field-hint">همهٔ ' + (INITIAL_DATA.placementRegions || []).length + ' منطقهٔ Placement به‌صورت چرخشی در ساب تولید می‌شوند.</span>';
+    if (raw === 'multi_placement') return '<span class="field-hint">مولتی‌لوکیشن واقعی: خروجی هر نود از ProxyIP کشور همان منطقه در مسیر تعیین می‌شود؛ Colo تحمیل نمی‌شود.</span>';
     var colo = (raw.split(':')[1] || '').toUpperCase();
     var item = (INITIAL_DATA.placementRegions || []).filter(function(r) { return r.colo === colo; })[0];
     if (!item) return '';
@@ -5771,7 +5776,11 @@ ${PWA_HEAD_TAGS}
       var picked = String(val || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
       var regionItems = INITIAL_DATA.proxyRegions || [];
       var regionChips = regionItems.map(function(region) {
-        var on = picked.indexOf(region.code) !== -1;
+        // کدهای قدیمی/کشوری GB و US را هم به ردیف‌های واقعی UK/IAD نگاشت
+        // می‌کنیم تا هنگام باز کردن فرم، انتخاب قبلی کاربر خالی دیده نشود.
+        var on = picked.indexOf(region.code) !== -1 ||
+          (region.code === 'UK' && picked.indexOf('GB') !== -1) ||
+          (region.code === 'IAD' && picked.indexOf('US') !== -1);
         return '<label class="region-chip' + (on ? ' is-on' : '') + '">' +
           '<input type="checkbox" data-multi-pick="' + field.key + '" value="' + region.code + '"' + (on ? ' checked' : '') + '>' +
           '<span>' + region.flag + ' ' + region.name + ' <b>' + region.code + '</b></span></label>';
@@ -5796,7 +5805,7 @@ ${PWA_HEAD_TAGS}
         '<div class="port-actions">' +
           '<button class="port-mini" type="button" data-port-all="' + field.key + '">انتخاب همه</button>' +
           '<button class="port-mini" type="button" data-port-none="' + field.key + '">پاک کردن</button>' +
-          '<span class="port-hint">' + (field.tls ? 'حداقل ۳ پورت TLS' : 'حداقل ۳ پورت HTTP') + '</span>' +
+          '<span class="port-hint">' + (field.tls ? 'فقط پورت‌های رسمی TLS کلادفلر' : 'اختیاری — خالی یعنی فقط TLS') + '</span>' +
         '</div>' + hint + '</div>';
     }
     var attrs = 'type="' + (field.type === 'number' ? 'number' : 'text') + '" id="' + id + '" data-uf="' + field.key + '"';
@@ -5902,10 +5911,12 @@ ${PWA_HEAD_TAGS}
     var placementRaw = String(cfg.placement || 'auto');
     var placementMode = placementRaw.indexOf('manual_placement:') === 0
       ? 'manual_placement'
-      : placementRaw === 'multi_placement' ? 'multi_placement' : 'auto';
+      : placementRaw === 'multi_placement' ? 'multi_placement'
+        : placementRaw === 'off' ? 'off' : 'auto';
     var placementText = placementMode === 'manual_placement'
       ? 'Placement: ' + (placementRaw.split(':')[1] || cfg.placementColo || '—')
-      : placementMode === 'multi_placement' ? 'مولتی‌لوکیشن' : 'خودکار';
+      : placementMode === 'multi_placement' ? 'مولتی‌لوکیشن واقعی'
+        : placementMode === 'off' ? 'خاموش' : 'خودکار';
     parts.push(chip('منطقه <b>' + placementText + '</b>'));
     parts.push(chip(cfg.ipMode === 'fixed' ? '<b>آی‌پی ثابت</b>' : 'کشور ثابت', cfg.ipMode === 'fixed' ? 'on' : ''));
     parts.push(chip('فرگمنت <b>' + (cfg.frag === 'yes' && cfg.fragmentPreset !== 'off' ? 'روشن' : 'خاموش') + '</b>', cfg.frag === 'yes' && cfg.fragmentPreset !== 'off' ? 'on' : ''));
@@ -6025,9 +6036,8 @@ ${PWA_HEAD_TAGS}
     var presets = INITIAL_DATA.presets || {};
     var p = presets[presetId] || presets['iran-fast'] || {};
     var baseCfg = Object.assign({}, INITIAL_DATA.defaults || {}, state.config || {}, (p && p.configOverrides) || {});
-    // پورت‌ها هنگام ساخت در سرور تصادفی انتخاب می‌شوند تا هر دکمه ترکیب متفاوتی بگیرد.
-    delete baseCfg.ports;
-    delete baseCfg.httpPorts;
+    // پورت‌های انتخاب‌شده در تنظیمات/پریست باید در کاربر ساخته‌شده هم بمانند؛
+    // حذف آن‌ها باعث می‌شد سرور دوباره پورت‌های تصادفی انتخاب کند.
     // انتخاب آدرس‌های یکتا و ترکیب IPv4/IPv6/دامنه/ProxyIP در سرور انجام می‌شود
     // تا دو کاربر هیچ آدرس مشترکی نگیرند و همهٔ مخزن‌ها سهم داشته باشند.
     var shortTag = {

@@ -730,21 +730,25 @@ export async function saveGlobalConfig(env = {}, newValues = {}) {
   const detectedKv = detectKvBinding(env);
   const now = Date.now();
 
+  // پورت HTTP اختیاری است و مقدار خالی یک انتخاب معتبر («فقط TLS») است؛
+  // حذف کلید در نسخهٔ قبلی باعث می‌شد بعد از بازخوانی، پورت‌های پیش‌فرض
+  // دوباره برگردند و ذخیره‌نشدن تنظیمات به نظر برسد.
+  const preservesEmpty = (key) => key === 'httpPorts';
   for (const [k, v] of Object.entries(newValues || {})) {
-    if (v === '' || v === null || v === undefined) {
+    if ((v === '' || v === null || v === undefined) && !preservesEmpty(k)) {
       delete memoryStore.globalConfig[k];
     } else {
-      memoryStore.globalConfig[k] = String(v);
+      memoryStore.globalConfig[k] = v == null ? '' : String(v);
     }
   }
 
   if (detectedD1 && memoryStore.d1SchemaReady) {
     // همهٔ کلیدها در یک batch نوشته می‌شوند (اتمی و سریع) و خطای واقعی D1
-    // ذخیره می‌شود تا در پنل به‌جای پیام «ذخیره شد» ي‌صورت صادقانه گزارش گردد.
+    // ذخیره می‌شود تا در پنل به‌جای پیام «ذخیره شد» به‌صورت صادقانه گزارش گردد.
     try {
       const statements = [];
       for (const [k, v] of Object.entries(newValues || {})) {
-        if (v === '' || v === null || v === undefined) {
+        if ((v === '' || v === null || v === undefined) && !preservesEmpty(k)) {
           statements.push(safeBind(detectedD1.db.prepare(`DELETE FROM system_config WHERE key = ?`), k));
         } else {
           statements.push(safeBind(
@@ -753,7 +757,7 @@ export async function saveGlobalConfig(env = {}, newValues = {}) {
                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
             ),
             k,
-            String(v),
+            v == null ? '' : String(v),
             now
           ));
         }
@@ -938,6 +942,10 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
     presetId,
     {
       ...(payload.config || {}),
+      // پورت‌های سطح بالای API هم باید مثل پورت‌های config اعمال شوند؛
+      // قبلاً فقط برای تصمیم randomize خوانده می‌شدند و مقدارشان نادیده می‌ماند.
+      ...(payload.ports !== undefined ? { ports: payload.ports } : {}),
+      ...(payload.httpPorts !== undefined ? { httpPorts: payload.httpPorts } : {}),
       wk: payload.wk ?? payload.config?.wk ?? globalCfg.wk ?? CONFIG_DEFAULTS.wk,
       ev: payload.ev ?? payload.config?.ev ?? globalCfg.ev ?? CONFIG_DEFAULTS.ev,
       et: payload.et ?? payload.config?.et ?? globalCfg.et ?? CONFIG_DEFAULTS.et,
@@ -990,12 +998,13 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
       } : {})
     }
   );
-  const explicitPorts = payload.ports ?? payload.config?.ports;
-  const explicitHttpPorts = payload.httpPorts ?? payload.config?.httpPorts;
+  // هر مقدار صریحی که از فرم/API آمده انتخاب کاربر است؛ حتی اگر با مقدار
+  // پیش‌فرض یکی باشد نباید دوباره تصادفی شود. فقط ساخت بدون تنظیم پورت تصادفی است.
+  const hasExplicitPorts = payload.ports !== undefined || payload.config?.ports !== undefined;
+  const hasExplicitHttpPorts = payload.httpPorts !== undefined || payload.config?.httpPorts !== undefined;
   const mergedUserConfig = ensureSubscriptionPortVariety(seededUserConfig, {
-    // مقدار پیش‌فرض پنل به‌معنی انتخاب دستی نیست؛ در ساخت کاربر تصادفی می‌شود.
-    randomize: !explicitPorts || String(explicitPorts) === String(CONFIG_DEFAULTS.ports),
-    randomizeHttp: !explicitHttpPorts || String(explicitHttpPorts) === String(CONFIG_DEFAULTS.httpPorts)
+    randomize: !hasExplicitPorts,
+    randomizeHttp: !hasExplicitHttpPorts
   });
 
   // مقادیر ارسالی کاربر اولویت دارند؛ در نبود آن‌ها تنظیمات اختصاصی همان پریست
@@ -1102,6 +1111,8 @@ export async function updateUser(env = {}, userId, payload = {}, clientIp = '') 
   const updatedConfig = ensureSubscriptionPortVariety(normalizeEffectiveConfig({
     ...existing.config,
     ...(payload.config || {}),
+    ...(payload.ports !== undefined ? { ports: payload.ports } : {}),
+    ...(payload.httpPorts !== undefined ? { httpPorts: payload.httpPorts } : {}),
     ...(payload.wk !== undefined ? { wk: payload.wk } : {}),
     ...(payload.ev !== undefined ? { ev: payload.ev } : {}),
     ...(payload.et !== undefined ? { et: payload.et } : {}),

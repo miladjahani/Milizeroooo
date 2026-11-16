@@ -43,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.14.2';
+export const VERSION = 'v3.15.0';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // سقف سخت تعداد نودهای هر ساب‌لینک؛ حالت خودکار هم بیشتر از این نود نمی‌سازد.
@@ -78,7 +78,7 @@ export const CONFIG_DEFAULTS = {
   // — مسیر تحریم‌شکن: sync_placement | multi_cmliu | manual_proxyip
   proxyMode: 'sync_placement',
   proxyRegion: 'DE',
-  proxyMultiRegions: 'DE,NL,UK,FR,FI,PL,TR,IAD,LAX,CA,AE,SG,JP,KR,HK,Oracle,DigitalOcean,Vultr,BPB',
+  proxyMultiRegions: 'DE,NL,UK,FR,FI,SE,CH,SG,JP,KR,HK,IAD,Oracle,BPB',
   // — گزینه‌های کلاینت که در کانفیگ‌های تولیدشده اعمال می‌شوند
   doh: 'yes', // DNS over HTTPS در کانفیگ کلاینت
   tcp: 'yes', // TCP fast-open / tcp-concurrent در کانفیگ کلاینت
@@ -340,8 +340,9 @@ export function parseNodePorts(value = '') {
   return list.length ? list : [443];
 }
 
-// حداقل ۳ پورت TLS و ۳ پورت HTTP برای هر اشتراک؛ در ساخت کاربر، پورت‌ها
-// تصادفی از فهرست رسمی کلادفلر انتخاب می‌شوند تا هر کاربر ترکیب متفاوتی بگیرد.
+// انتخاب پورت‌ها در فرم کاربر همیشه اولویت دارد. فقط وقتی کاربر/پنل هیچ
+// مقداری نفرستاده باشد، برای ساخت خودکار از هر خانواده ۳ پورت تصادفی می‌چینیم؛
+// قبلاً مقدار پیش‌فرض یا یک لیست دستی می‌توانست دوباره تصادفی و ناپایدار شود.
 export function ensureSubscriptionPortVariety(config = {}, options = {}) {
   const random = typeof options.random === 'function' ? options.random : Math.random;
   const shuffle = (list) => {
@@ -354,20 +355,26 @@ export function ensureSubscriptionPortVariety(config = {}, options = {}) {
   };
   const pick = (value, allowed, minimum, randomize) => {
     const selected = [...new Set(parseNodePorts(value).filter(port => allowed.includes(port)))];
-    if (randomize && selected.length <= minimum) {
-      return shuffle(allowed).slice(0, Math.max(minimum, selected.length));
-    }
-    while (selected.length < minimum) {
-      const candidates = allowed.filter(port => !selected.includes(port));
-      if (!candidates.length) break;
-      selected.push(candidates[Math.floor(random() * candidates.length)]);
-    }
-    return selected;
+    if (randomize) return shuffle(allowed).slice(0, minimum);
+    // لیست صریح کاربر را دست‌نخورده نگه می‌داریم؛ فقط اگر هیچ پورت معتبری
+    // نمانده باشد یک پورت امن برمی‌گردانیم.
+    return selected.length ? selected : [allowed[0]];
   };
+  const hasPorts = Object.prototype.hasOwnProperty.call(config, 'ports');
+  const hasHttpPorts = Object.prototype.hasOwnProperty.call(config, 'httpPorts');
+  const tlsPorts = (options.randomize === true || !hasPorts)
+    ? pick(config.ports, CF_HTTPS_PORTS, 3, true)
+    : pick(config.ports, CF_HTTPS_PORTS, 1, false);
+  const httpPorts = (options.randomizeHttp === true || !hasHttpPorts)
+    ? pick(config.httpPorts, CF_HTTP_PORTS, 3, true)
+    : pick(config.httpPorts, CF_HTTP_PORTS, 0, false);
   return {
     ...config,
-    ports: pick(config.ports, CF_HTTPS_PORTS, 3, options.randomize !== false).join(','),
-    httpPorts: pick(config.httpPorts, CF_HTTP_PORTS, 3, options.randomizeHttp !== false).join(',')
+    ports: tlsPorts.join(','),
+    // پورت HTTP اختیاری است؛ اگر کاربر همه را پاک کند، خالی می‌ماند.
+    httpPorts: String(config.httpPorts ?? '').trim() === '' && hasHttpPorts && options.randomizeHttp !== true
+      ? ''
+      : httpPorts.join(',')
   };
 }
 
@@ -560,8 +567,18 @@ export function getPlacementRegion(value = '') {
   return PLACEMENT_BY_COLO.get(String(value || '').trim().toUpperCase()) || null;
 }
 
+// کدهای کشور رایج در فرم/پریست‌ها را به کد واقعی ردیف ProxyIP نگاشت می‌کنیم؛
+// مثلاً US در ردیف‌های IAD/LAX و GB در ردیف UK تعریف شده است.
+const PROXYIP_CODE_ALIASES = {
+  gb: 'uk',
+  us: 'iad',
+  ae: 'ae',
+  tr: 'tr'
+};
+
 export function getProxyIpRegion(value = '') {
-  return PROXYIP_BY_CODE.get(String(value || '').trim().toLowerCase()) || null;
+  const raw = String(value || '').trim().toLowerCase();
+  return PROXYIP_BY_CODE.get(raw) || PROXYIP_BY_CODE.get(PROXYIP_CODE_ALIASES[raw] || '') || null;
 }
 
 export function placementForCountry(country = '') {
@@ -572,6 +589,9 @@ export function placementForCountry(country = '') {
 // ورودی‌های قدیمی مثل «DE» یا «FRA» هم به حالت دستی نگاشت می‌شوند.
 export function normalizePlacementValue(value = '', fallbackColo = '') {
   const raw = String(value || '').trim();
+  if (/^(off|none|disabled|no)$/i.test(raw)) {
+    return { mode: 'off', colo: '', region: null, value: 'off' };
+  }
   if (!raw || /^auto$/i.test(raw) || /^cf$/i.test(raw)) {
     return { mode: 'auto', colo: '', region: null, value: 'auto' };
   }
@@ -842,7 +862,10 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
   snap.awgv = ['1', '2', '3'].includes(String(snap.awgv || '').trim()) ? String(snap.awgv).trim() : '3';
   snap.fp = snap.fp || 'chrome';
   snap.patt = snap.patt || '/?ed=2048';
-  snap.ports = parseNodePorts(snap.ports).join(',');
+  // فقط پورت‌های HTTPS واقعی کلادفلر در بخش TLS پذیرفته می‌شوند؛ پورت دلخواه
+  // (مثل 1..65535) روی لبهٔ CF سرو نمی‌شود و نود بدون پینگ می‌ماند.
+  const allowedTlsPorts = parseNodePorts(snap.ports).filter(port => CF_HTTPS_PORTS.includes(port));
+  snap.ports = (allowedTlsPorts.length ? allowedTlsPorts : [443]).join(',');
   // پورت‌های HTTP اختیاری‌اند؛ مقدار خالی یعنی فقط نودهای TLS ساخته شوند
   snap.httpPorts = String(snap.httpPorts == null ? CONFIG_DEFAULTS.httpPorts : snap.httpPorts).trim()
     ? parseNodePorts(snap.httpPorts).filter(port => CF_HTTP_PORTS.includes(port)).join(',')

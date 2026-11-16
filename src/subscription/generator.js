@@ -192,7 +192,7 @@ export function buildNodeRoutingPlan(cfg = {}, requestColo = '') {
       const region = getPlacementRegion(code);
       return region ? { colo: region.colo, country: region.country, flag: region.flag, auto: false } : null;
     }).filter(Boolean);
-  } else {
+  } else if (placement.mode === 'auto') {
     const region = colo ? getPlacementRegion(colo) : null;
     placements = [{ colo: '', country: region ? region.country : '', flag: region ? region.flag : '', auto: true, detectedColo: colo }];
   }
@@ -201,7 +201,11 @@ export function buildNodeRoutingPlan(cfg = {}, requestColo = '') {
   if (cfg.sb === 'yes') {
     const mode = normalizeProxyMode(cfg.proxyMode);
     if (mode === 'sync_placement') {
-      if (placement.mode === 'auto') {
+      // Placement خاموش یعنی نه پینگ مسیر را با pl عوض می‌کنیم و نه به‌صورت
+      // خودکار ProxyIP تحمیل می‌کنیم؛ مسیر مستقیم/تنظیمات دستی کاربر می‌ماند.
+      if (placement.mode === 'off') {
+        proxies = [];
+      } else if (placement.mode === 'auto') {
         const region = colo ? getPlacementRegion(colo) : null;
         proxies = [{
           host: 'auto',
@@ -278,7 +282,9 @@ export function buildNodePath(proto, cfg = {}, wkOverride = '', item = null) {
   // با لینک‌های قدیمی، p و proxy_ip را هم می‌خواند.
   const proxyTarget = String(item?.proxyIp || (item?.proxy ? '' : cfg.p) || '').trim();
   if (proxyTarget) parts.push(`proxyip=${encodeProxyForPath(proxyTarget)}`);
-  if (item?.placementColo) parts.push(`pl=${encodeURIComponent(item.placementColo)}`);
+  // عمداً `pl` را داخل مسیر نمی‌گذاریم: Colo قابل‌اجبار از سمت کلاینت نیست و
+  // فقط باعث پیچیدگی/خطای مسیر می‌شد. منطقهٔ واقعی از ProxyIP داخل مسیر می‌آید
+  // (همان قاعدهٔ cfnew) و Address نود فقط برای پینگ است.
   return pathName + (parts.length ? '?' + parts.join('&') : '');
 }
 
@@ -490,6 +496,14 @@ export function filterAddressFamily(list, cfg = {}) {
   });
 }
 
+// دامنه‌های ProxyIP فقط مقصد مسیر (پروکسی خروجی) هستند و هرگز نباید به‌عنوان
+// Address نود در کلاینت بنشینند؛ وگرنه نود به سرور واسط/مقصد اشتباه وصل می‌شود.
+function isProxyLikeNodeHost(host = '') {
+  const h = String(host || '').trim().toLowerCase();
+  if (!h) return false;
+  return h.includes('cmliussss.net') || h.includes('proxyip.') || /(^|\.)bpb\./i.test(h);
+}
+
 export function getStaticCfAddresses(cfg = {}) {
   const v4 = cfg.ipv4 === 'no' ? [] : OFFICIAL_DIRECT_IPS.slice();
   const v6 = cfg.ipv6 === 'no' ? [] : OFFICIAL_DIRECT_IPV6.slice();
@@ -498,7 +512,7 @@ export function getStaticCfAddresses(cfg = {}) {
   const manual = parseCustomPreferredString(cfg.yx);
   const manualV4 = cfg.ipv4 === 'no' ? [] : manual.ipList.map(item => item.ip).filter(ip => !String(ip).includes(':'));
   const manualV6 = cfg.ipv6 === 'no' ? [] : manual.ipList.map(item => item.ip).filter(ip => String(ip).includes(':'));
-  const manualDomains = manual.domainList.map(item => item.domain).filter(Boolean);
+  const manualDomains = manual.domainList.map(item => item.domain).filter(domain => domain && !isProxyLikeNodeHost(domain));
   // اگر کاربر آدرس دستی دارد، همان‌ها مبنا هستند تا هیچ آی‌پی رسمی مشترکی
   // بین دو کاربر در نودهای زنجیره‌ای تکرار نشود.
   if (manualV4.length || manualV6.length || manualDomains.length) {
@@ -1143,7 +1157,8 @@ function buildXhttpLinks(list, userUuid, workerHost, cfg) {
     if (item.proxy) xhttpPath += `&s=${encodeProxyForPath(item.proxy)}`;
     const xhttpProxyTarget = String(item.proxyIp || (item.proxy ? '' : cfg.p) || '').trim();
     if (xhttpProxyTarget) xhttpPath += `&proxyip=${encodeProxyForPath(xhttpProxyTarget)}`;
-    if (item.placementColo) xhttpPath += `&pl=${encodeURIComponent(item.placementColo)}`;
+    // `pl` در مسیر قرار نمی‌گیرد؛ cfnew هم منطقه را با ProxyIP مسیر تعیین
+    // می‌کند و Address نود صرفاً برای اتصال/پینگ است.
     const nodeHost = frontHostFor(item, workerHost);
     const effectiveSni = getEffectiveSniForNode(nodeHost, rawHost, idx);
     for (const { port } of xhttpPorts) {
@@ -2626,12 +2641,11 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   // Placement/ProxyIP فقط مسیر و نام نودها را عوض می‌کند؛ منبع Address همچنان
   // از همان استخر ۶۹۶ آی‌پی یا آدرس‌های دستی می‌آید و دست نمی‌خورد.
   const routingPlan = buildNodeRoutingPlan(cfg, queryOverrides.colo || '');
+  // بودجهٔ سراسری تولید نودهای چندلوکیشن؛ چند منبع آدرس (دستی، Origin و
+  // دامنهٔ پنل) نباید هرکدام جداگانه صدها لینک بسازند.
+  let multiFanoutBudget = MAX_SUB_NODE_COUNT;
 
   function appendFromSource(sourceList) {
-    // فیدهای عمومی SOCKS/HTTP می‌توانند هزاران خط برگردانند؛ سقف امنیتي
-    // از پرش حافظه/Stack Overflow در ساخت لینک‌ها جلوگیری می‌کند.
-    const safeList = filterAddressFamily(sourceList, cfg).slice(0, 160);
-    if (!Array.isArray(safeList) || safeList.length === 0) return;
     // در حالت‌های چندلوکیشن (Placement یا ProxyIP) برای هر آدرس به تعداد
     // منطقه‌های انتخاب‌شده نود مجزا می‌سازیم تا همهٔ کشورها/Coloها در ساب
     // حاضر باشند. Address همان آی‌پی/دامنهٔ قبلی است و دست نمی‌خورد.
@@ -2640,6 +2654,24 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
       cfg.sb === 'yes' && normalizeProxyMode(cfg.proxyMode) === 'multi_cmliu' ? routingPlan.proxies.length : 1,
       1
     );
+    // تولید صدها/هزاران لینک قبل از اعمال سقف نهایی، CPU ورکر را بالا می‌برد و
+    // می‌تواند ساب مولتی‌لوکیشن را با خطای 1012/timeout روبه‌رو کند. تعداد
+    // آدرس‌های پایه را طوری محدود می‌کنیم که خروجی حول سقف ۳۵۰ بماند.
+    const activeProtoCount = Math.max(1, [evEnabled, etEnabled, exEnabled, esEnabled].filter(Boolean).length);
+    const portVariantCount = Math.max(1, buildPortVariants(cfg).length);
+    // در حالت چندلوکیشن هر آدرس پایه به تعداد fanout شاخه می‌خورد؛ با ceil و
+    // حداقل ۴ آدرس، خروجی واقعی خیلی بیشتر از ۳۵۰ ساخته می‌شد و زمان CPU
+    // ورکر را بالا می‌برد. floor با حداقل ۱ آدرس، کار تولید را واقعاً محدود
+    // می‌کند و همچنان همهٔ کشورهای انتخاب‌شده در ساب حاضر می‌شوند.
+    const fanoutUnit = Math.max(1, fanout * activeProtoCount * portVariantCount);
+    const maxBaseAddresses = fanout > 1
+      ? Math.max(0, Math.floor(multiFanoutBudget / fanoutUnit))
+      : 160;
+    if (maxBaseAddresses < 1) return;
+    // فیدهای عمومی SOCKS/HTTP می‌توانند هزاران خط برگردانند؛ سقف امنیتی
+    // از پرش حافظه/Stack Overflow در ساخت لینک‌ها جلوگیری می‌کند.
+    const safeList = filterAddressFamily(sourceList, cfg).slice(0, Math.min(160, maxBaseAddresses));
+    if (!Array.isArray(safeList) || safeList.length === 0) return;
     const decorated = [];
     safeList.forEach(item => {
       const withFront = frontHosts.length > 1
@@ -2649,10 +2681,15 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
         decorated.push(annotateRoutingItem(withFront, routingPlan, routingCursor++));
       }
     });
+    const before = protoGroups.vless.length + protoGroups.trojan.length + protoGroups.xhttp.length + protoGroups.ss.length;
     if (evEnabled) protoGroups.vless.push(...buildVlessLinks(decorated, userUuid, workerHost, cfg, wkOverride));
     if (etEnabled) protoGroups.trojan.push(...buildTrojanLinks(decorated, userUuid, workerHost, cfg, wkOverride));
     if (exEnabled) protoGroups.xhttp.push(...buildXhttpLinks(decorated, userUuid, workerHost, cfg));
     if (esEnabled) protoGroups.ss.push(...buildShadowsocksLinks(decorated, userUuid, workerHost, cfg));
+    if (fanout > 1) {
+      const produced = protoGroups.vless.length + protoGroups.trojan.length + protoGroups.xhttp.length + protoGroups.ss.length - before;
+      multiFanoutBudget = Math.max(0, multiFanoutBudget - produced);
+    }
   }
 
   // ساب اختصاصی IPv6: همهٔ آی‌پی‌های نسخه ۶ استخر + آی‌پی‌های رسمی کلادفلر
@@ -2757,7 +2794,10 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     if (panelDomainNodes.length) appendFromSource(panelDomainNodes);
   }
 
-  const { ipList: customIps, domainList: customDomains, proxyList: customProxies } = parseCustomPreferredString(cfg.yx);
+  const { ipList: customIps, domainList: customDomainsRaw, proxyList: customProxies } = parseCustomPreferredString(cfg.yx);
+  // دامنه‌های ProxyIP/BPB فقط برای مسیر خروج هستند؛ اگر به‌عنوان Address نود
+  // استفاده شوند، کلاینت به مقصد اشتباه وصل می‌شود و پینگ/1012 خراب می‌شود.
+  const customDomains = customDomainsRaw.filter(item => item.domain && !isProxyLikeNodeHost(item.domain));
   const hasCustomPreferred = customIps.length > 0 || customDomains.length > 0;
 
   // ورودی‌های پروکسی (پورت غیر CF) به نودهای زنجیره‌ای تبدیل می‌شوند تا پینگ بدهند

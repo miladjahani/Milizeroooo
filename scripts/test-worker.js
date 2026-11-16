@@ -415,7 +415,7 @@ async function runTests() {
     assert.strictEqual(createdData.user.subNodeCount, 0, 'کاربر ساخته‌شده باید در حالت خودکار (بدون سقف ۱۰۰) باشد');
     assert.ok(String(createdData.user.config.yx || '').split(',').length >= 20, 'ترکیب آدرس‌های کاربر باید از چند نوع مخزن ساخته شود');
     assert.ok(String(createdData.user.config.yx || '').includes('['), 'ترکیب آدرس باید IPv6 داشته باشد');
-    assert.ok(String(createdData.user.config.yx || '').includes('ProxyIP-'), 'ترکیب آدرس باید ProxyIP داشته باشد');
+    assert.strictEqual(String(createdData.user.config.yx || '').includes('ProxyIP-'), false, 'دامنهٔ ProxyIP نباید به‌عنوان Address نود در ترکیب آدرس باشد');
     assert.match(String(createdData.user.config.yxURL || ''), /socks5/i, 'ترکیب آدرس باید فید SOCKS داشته باشد');
     assert.match(String(createdData.user.config.yxURL || ''), /https?\.txt|https?:\/\//i, 'ترکیب آدرس باید فید HTTP داشته باشد');
     const subRawResp = await worker.fetch(
@@ -496,12 +496,17 @@ async function runTests() {
     const statusHtml = await statusPageResp.text();
     assert.strictEqual(statusHtml.includes('<script>alert(1)</script>'), false, 'تگ اسکریپت در نام کاربری باید Escape شود تا XSS رخ ندهد');
 
+    const customTlsPorts = '2053,2087,2096';
+    const customHttpPorts = '8080,2052,2095';
     for (const uname of ['user-4', 'user-5', 'user-6']) {
       const uResp = await worker.fetch(
         new Request(`https://mili.pages.dev/${adminUuid}/api/users`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-          body: JSON.stringify({ username: uname })
+          body: JSON.stringify({
+            username: uname,
+            ...(uname === 'user-4' ? { config: { ports: customTlsPorts, httpPorts: customHttpPorts } } : {})
+          })
         }),
         d1Env, {}
       );
@@ -519,6 +524,29 @@ async function runTests() {
     // دو کاربر نباید آدرس مشترک داشته باشند و فقط پریست iran-fast باید فرگمنت بسازد.
     const user4 = check5Data.users.find(u => u.username === 'user-4');
     assert.ok(user4 && Number(user4.subNodeCount) === 0, 'کاربر با پریست پیش‌فرض باید در حالت خودکار باشد');
+    // پورت‌های انتخابی هنگام ایجاد باید همان‌طور در D1/API بمانند؛ نه اینکه
+    // با پورت‌های پیش‌فرض جایگزین یا دوباره تصادفی شوند.
+    assert.strictEqual(user4.config.ports, customTlsPorts, 'پورت‌های TLS انتخاب‌شده باید در ساخت کاربر حفظ شوند');
+    assert.strictEqual(user4.config.httpPorts, customHttpPorts, 'پورت‌های HTTP انتخاب‌شده باید در ساخت کاربر حفظ شوند');
+    const editPortsResp = await worker.fetch(
+      new Request(`https://mili.pages.dev/${adminUuid}/api/users`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+        body: JSON.stringify({ id: user4.id, config: { ports: '443,2053,2087', httpPorts: '' } })
+      }),
+      d1Env, {}
+    );
+    const editPortsData = await editPortsResp.json();
+    assert.strictEqual(editPortsResp.status, 200, 'ذخیرهٔ پورت‌های جدید باید موفق باشد');
+    assert.strictEqual(editPortsData.user.config.ports, '443,2053,2087', 'پورت‌های جدید باید در پاسخ ذخیره برگردند');
+    assert.strictEqual(editPortsData.user.config.httpPorts, '', 'پاک‌کردن پورت‌های HTTP باید حفظ شود');
+    const usersAfterPortEdit = await (await worker.fetch(
+      new Request(`https://mili.pages.dev/${adminUuid}/api/users?t=${Date.now()}`),
+      d1Env, {}
+    )).json();
+    const user4AfterReload = usersAfterPortEdit.users.find(u => u.id === user4.id);
+    assert.strictEqual(user4AfterReload.config.ports, '443,2053,2087', 'پورت‌ها بعد از بازخوانی پنل باید همان مقدار ذخیره‌شده باشند');
+    assert.strictEqual(user4AfterReload.config.httpPorts, '', 'خالی‌بودن HTTP بعد از بازخوانی باید حفظ شود');
     const user4Raw = await (await worker.fetch(
       new Request(`https://mili.pages.dev/sub/${user4.uuid}?target=raw`),
       d1Env, {}
@@ -801,6 +829,35 @@ async function runTests() {
     assert.strictEqual(restoreData.usersRestored, 5, 'بازیابی بکاپ ادمین باید هر ۵ کاربر را بازیابی کند');
     console.log('  ✓ تست ۹ (سیستم جامع بکاپ و بازیابی ادمین و کاربر با دکمه در هدرها): موفق');
 
+    // تست ۱۰: ذخیرهٔ تنظیمات پورت در تب امنیت/انتقال (نه فقط فرم کاربر).
+    // قبلاً httpPorts خالی از system_config حذف می‌شد و پس از بازخوانی،
+    // پورت‌های پیش‌فرض برمی‌گشتند؛ این تست باید همان رگرسیون را بگیرد.
+    const saveCfgResp = await worker.fetch(
+      new Request(`https://mili.pages.dev/${adminUuid}/api/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+        body: JSON.stringify({ ports: '443,2053,2087', httpPorts: '' })
+      }),
+      d1Env,
+      {}
+    );
+    assert.strictEqual(saveCfgResp.status, 200, 'ذخیرهٔ تنظیمات پورت باید کد 200 برگرداند');
+    const saveCfgData = await saveCfgResp.json();
+    assert.strictEqual(saveCfgData.success, true);
+    assert.strictEqual(saveCfgData.config.ports, '443,2053,2087', 'پورت TLS جدید باید در پاسخ ذخیره باشد');
+    assert.strictEqual(saveCfgData.config.httpPorts, '', 'خالی‌بودن HTTP باید در پاسخ ذخیره باشد');
+    // پاسخ saveGlobalConfig بعد از یک بازخوانی اجباری از D1 برگردانده می‌شود؛
+    // بنابراین همین مقادیر، ذخیره‌شدن واقعی را تأیید می‌کنند.
+    const cfgReloadResp = await worker.fetch(
+      new Request(`https://mili.pages.dev/${adminUuid}/api/config`, { headers: { Cookie: sessionCookie } }),
+      d1Env,
+      {}
+    );
+    assert.strictEqual(cfgReloadResp.status, 200, 'بازخوانی تنظیمات باید کد 200 برگرداند');
+    const cfgReloadData = await cfgReloadResp.json();
+    assert.strictEqual(cfgReloadData.ports, '443,2053,2087', 'پورت TLS باید بعد از بازخوانی همان مقدار باشد');
+    assert.strictEqual(cfgReloadData.httpPorts, '', 'HTTP خالی باید بعد از بازخوانی خالی بماند');
+    console.log('  ✓ تست ۱۰ (ذخیره و بازخوانی پورت‌های تب امنیت/انتقال در تنظیمات سراسری): موفق');
 
     console.log('\n🎉 تمام تست‌های عملکردی، ضد بن کلادفلر، ضد فیلتر Pages.dev، امنیت، دیتابیس D1 و رابط کاربری ۱۰۰٪ پاس شدند!');
   } finally {
