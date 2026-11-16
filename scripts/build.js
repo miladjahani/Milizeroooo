@@ -94,7 +94,7 @@ function stripLocalImportsAndExports(code, isEntryPoint = false) {
 }
 
 async function buildAll() {
-  console.log('⚡ [miliconfig] در حال ساخت و باندل کردن ماژول‌های پروژه...');
+  console.log('⚡ [StudioDocs] در حال ساخت و باندل کردن ماژول‌های پروژه...');
 
   const chunks = [`import { connect as cfConnect } from 'cloudflare:sockets';\n`];
 
@@ -116,22 +116,17 @@ async function buildAll() {
   fs.mkdirSync(distDir, { recursive: true });
   fs.mkdirSync(publicDir, { recursive: true });
 
-  // ذخیره نسخه باندل‌شده خوانا جهت دیباگ و بررسی
-  fs.writeFileSync(path.join(distDir, 'worker.readable.js'), rawBundle, 'utf8');
-  fs.writeFileSync(path.join(ROOT_DIR, '明文源吗'), rawBundle, 'utf8');
-
   // اجرای مبهم‌سازی پیشرفته بدون خطای 1101
-  console.log('🔒 [miliconfig] در حال اعمال مبهم‌سازی پیشرفته (Advanced Obfuscation)...');
+  console.log('🔒 [StudioDocs] در حال اعمال مبهم‌سازی پیشرفته (Advanced Obfuscation)...');
   const obfuscatedCode = await obfuscateWorkerBundle(rawBundle);
 
   // نوشتن خروجی‌های نهایی برای Cloudflare Workers و Cloudflare Pages
   fs.writeFileSync(path.join(distDir, '_worker.js'), obfuscatedCode, 'utf8');
   fs.writeFileSync(path.join(publicDir, '_worker.js'), obfuscatedCode, 'utf8');
   fs.writeFileSync(path.join(ROOT_DIR, '_worker.js'), obfuscatedCode, 'utf8');
-  fs.writeFileSync(path.join(ROOT_DIR, '少年你相信光吗'), obfuscatedCode, 'utf8');
 
   // فایل‌های استاتیک کمکی برای Cloudflare Pages
-  const staticAssetsHtml = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><title>miliconfig</title></head><body>miliconfig Cloudflare Pages Active</body></html>`;
+  const staticAssetsHtml = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex, nofollow, noarchive"><title>StudioDocs — Static Asset & Web Vitals Monitor</title></head><body>StudioDocs static asset monitor is active.</body></html>`;
   fs.writeFileSync(path.join(distDir, 'status-static.html'), staticAssetsHtml, 'utf8');
   fs.writeFileSync(path.join(publicDir, 'status-static.html'), staticAssetsHtml, 'utf8');
   fs.writeFileSync(path.join(distDir, '.nojekyll'), '', 'utf8');
@@ -139,18 +134,18 @@ async function buildAll() {
 
   // سازگاری خودکار با محیط بیلد Cloudflare Pages (تشخیص متغیر CF_PAGES=1)
   if (process.env.CF_PAGES === '1' || process.env.CF_PAGES === 'true') {
-    console.log('☁️ [miliconfig] محیط Cloudflare Pages تشخیص داده شد؛ تنظیم خودکار wrangler.toml برای Pages...');
-    const pagesWrangler = `name = "miliconfig"
+    console.log('☁️ [StudioDocs] محیط Cloudflare Pages تشخیص داده شد؛ تنظیم خودکار wrangler.toml برای Pages...');
+    const pagesWrangler = `name = "studio-docs-app"
 pages_build_output_dir = "dist"
 compatibility_date = "2024-11-06"
 
 [vars]
-BRAND = "miliconfig"
+BRAND = "studiodocs"
 `;
     fs.writeFileSync(path.join(ROOT_DIR, 'wrangler.toml'), pagesWrangler, 'utf8');
   }
 
-  console.log(`✅ [miliconfig] بیلد و مبهم‌سازی با موفقیت کامل شد! حجم باندل مبهم‌شده: ${(obfuscatedCode.length / 1024).toFixed(1)} KB`);
+  console.log(`✅ [StudioDocs] بیلد و مبهم‌سازی با موفقیت کامل شد! حجم باندل مبهم‌شده: ${(obfuscatedCode.length / 1024).toFixed(1)} KB`);
 }
 
 buildAll().catch(err => {

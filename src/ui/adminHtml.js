@@ -4746,7 +4746,7 @@ ${PWA_HEAD_TAGS}
       targetSel.value = current && users.some(function(u) { return u.id === current; }) ? current : '';
     }
     renderMetrics();
-    enhanceAllCustomSelects();
+    enhanceCustomSelects();
   }
 
   function renderLocations() {
@@ -4799,7 +4799,7 @@ ${PWA_HEAD_TAGS}
       }).join('');
       locUser.value = current && (state.users || []).some(function(u) { return u.id === current; }) ? current : '';
     }
-    enhanceAllCustomSelects();
+    enhanceCustomSelects();
   }
 
   // افزودن تصادفی آی‌پی سالم همان منطقه به نودهای ترجیحی (yx) کاربر انتخابی
@@ -5978,7 +5978,7 @@ ${PWA_HEAD_TAGS}
     updateFormSummary();
     if ($('userFormTitle')) $('userFormTitle').innerHTML = (user ? ICO.refresh + ' ویرایش کاربر «' + escHtml(user.username || '') + '»' : ICO.plus + ' ایجاد کاربر جدید');
     if ($('userFormSubmit')) $('userFormSubmit').innerHTML = user ? ICO.check + ' ذخیرهٔ تغییرات' : ICO.check + ' ساخت کاربر';
-    enhanceAllCustomSelects(body);
+    enhanceCustomSelects(body);
     syncConditionalFields();
     syncProxyManualField(false);
     // فرم جدید همیشه از بالای پنل باز شود، نه از موقعیت اسکرول فرم قبلی.
@@ -6180,7 +6180,7 @@ ${PWA_HEAD_TAGS}
     }
   }
 
-  function enhanceAllCustomSelects(root) {
+  function enhanceCustomSelects(root) {
     var scope = root || document;
     if (!scope.querySelectorAll) return;
     scope.querySelectorAll('select').forEach(syncOneCustomSelect);
@@ -6196,6 +6196,8 @@ ${PWA_HEAD_TAGS}
     formState.tab = 'basic';
     renderUserForm(user || null, null);
     openModal('createModal');
+    // تقویت مستقیم سلکت‌های همین مودال؛ بدون observer سراسری.
+    enhanceCustomSelects($('userFormBody'));
   }
 
   function saveUser() {
@@ -6624,7 +6626,7 @@ ${PWA_HEAD_TAGS}
     if (!host) return;
     host.innerHTML = Object.keys(SCAN_META).map(scanViewHtml).join('');
     closeScanView();
-    enhanceAllCustomSelects(host);
+    enhanceCustomSelects(host);
   }
 
   function openScanView(id) {
@@ -7062,7 +7064,7 @@ ${PWA_HEAD_TAGS}
     renderBackupUsersList();
     switchBackupTab('download');
     openModal('backupModal');
-    if (typeof enhanceAllCustomSelects === 'function') enhanceAllCustomSelects($('backupModal'));
+    if (typeof enhanceCustomSelects === 'function') enhanceCustomSelects($('backupModal'));
   }
 
   // دانلود مطمئن: پاسخ را اول بررسی می‌کنیم؛ اگر خطای احراز هویت یا سرور
@@ -7481,7 +7483,11 @@ ${PWA_HEAD_TAGS}
   fillSettings();
   syncConditionalFields();
   renderMetrics();
-  enhanceAllCustomSelects();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { enhanceCustomSelects(); }, { once: true });
+  } else {
+    enhanceCustomSelects();
+  }
 
   // راهنما: دو ثانیه پس از ورود با یک حرکت نرم جلوی کاربر می‌آید؛ اگر تیک
   // «دیگر خودکار باز نشود» را بزند، از دفعهٔ بعد فقط دستی باز می‌شود.

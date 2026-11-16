@@ -1655,7 +1655,6 @@ export async function handleXhttpPostRequest(request, env, ctx, globalCfg, allUs
     'X-Accel-Buffering': 'no',
     'Cache-Control': 'no-store',
     Connection: 'keep-alive',
-    Server: 'nginx',
     'Content-Type': 'application/octet-stream'
   };
   try {

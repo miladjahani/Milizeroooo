@@ -48,7 +48,7 @@ import {
   handleTelegramProxySessionRequest,
   handleTelegramProxyWs
 } from './telegram/webProxy.js';
-import { renderLoginGatewayHtml } from './ui/loginHtml.js';
+import { renderLoginPage } from './ui/loginHtml.js';
 import { renderUserStatusPageHtml } from './ui/statusHtml.js';
 import { renderAdminDashboardHtml } from './ui/adminHtml.js';
 import { pwaIconResponse, pwaManifestResponse, pwaServiceWorkerResponse } from './ui/pwa.js';
@@ -136,9 +136,8 @@ export default {
       };
       const loginPageResponse = async (extra = {}) => {
         const storage = await getStorageDiagnostics(env);
-        return new Response(renderLoginGatewayHtml({
+        return new Response(renderLoginPage(url.hostname, {
           initialized: storage.hasPassword,
-          customPath: globalCfg.d,
           storageWarning: !storage.d1Enabled,
           ...extra
         }), {
@@ -146,9 +145,7 @@ export default {
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
             'Cache-Control': 'no-store',
-            // استتار nginx: کلادفلر صفحه را وب‌سرور معمولی می‌بیند
-            'Server': 'nginx',
-            'X-Powered-By': 'nginx'
+            'X-Robots-Tag': 'noindex, nofollow, noarchive'
           }
         });
       };
@@ -250,7 +247,18 @@ export default {
       // ۴. هندل کردن درخواست‌های GET
       if (request.method === 'GET' || request.method === 'HEAD') {
         // ۴-۰-۰: ساب اختصاصی استخر آی‌پی miliconfig (فهرست ثابت داخل مخزن)
+        // این مسیرها دیگر عمومی نیستند؛ فقط نشست ادمین یا ?token=<admin-path>
+        // مجاز است و بقیهٔ درخواست‌ها پاسخ 404 می‌گیرند.
         if (url.pathname === '/ips' || url.pathname === '/ips.txt' || url.pathname === '/ips.json') {
+          const ipsToken = String(url.searchParams.get('token') || '').trim();
+          const ipsSessionOk = await verifyAdminSession(env, readCookie('mili_auth'));
+          const ipsTokenOk = Boolean(ipsToken) && isAdminAuthorizedPath(ipsToken, adminUuid, globalCfg.d);
+          if (!ipsSessionOk && !ipsTokenOk) {
+            return new Response(JSON.stringify({ error: 'Not Found' }), {
+              status: 404,
+              headers: { 'Content-Type': 'application/json; charset=utf-8', 'X-Robots-Tag': 'noindex, nofollow, noarchive' }
+            });
+          }
           const poolHeaders = {
             'Access-Control-Allow-Origin': '*',
             'Cache-Control': 'no-store',
@@ -296,6 +304,22 @@ export default {
         if (url.pathname === '/sw.js') return pwaServiceWorkerResponse();
         if (url.pathname === '/pwa-icon.svg') return pwaIconResponse();
 
+        // ۴-۰-۱: مسیر صریح /login برای ورود مستقیم بدون نمایش خودکار در ریشه
+        if (url.pathname === '/login') {
+          if (await verifyAdminSession(env, readCookie('mili_auth'))) {
+            const targetPath = '/' + String(globalCfg.d || adminUuid).replace(/^\/+|\/+$/g, '');
+            return new Response(null, {
+              status: 302,
+              headers: {
+                'Location': targetPath,
+                'Cache-Control': 'no-store',
+                'X-Robots-Tag': 'noindex, nofollow, noarchive'
+              }
+            });
+          }
+          return await loginPageResponse({ directGate: true });
+        }
+
         // ۴-الف: صفحه اصلی /
         if (url.pathname === '/' || pathParts.length === 0) {
           if (globalCfg.homepage && String(globalCfg.homepage).trim()) {
@@ -323,7 +347,8 @@ export default {
                     status: camouflageResp.status,
                     headers: {
                       'Content-Type': camouflageResp.headers.get('Content-Type') || 'text/html; charset=utf-8',
-                      'Cache-Control': 'no-cache, no-store, must-revalidate'
+                      'Cache-Control': 'no-cache, no-store, must-revalidate',
+                      'X-Robots-Tag': 'noindex, nofollow, noarchive'
                     }
                   });
                 }
@@ -350,7 +375,11 @@ export default {
             const targetPath = '/' + String(globalCfg.d || adminUuid).replace(/^\/+|\/+$/g, '');
             return new Response(null, {
               status: 302,
-              headers: { 'Location': targetPath, 'Cache-Control': 'no-store' }
+              headers: {
+                'Location': targetPath,
+                'Cache-Control': 'no-store',
+                'X-Robots-Tag': 'noindex, nofollow, noarchive'
+              }
             });
           }
           // مسیر مدیریت دیگر داخل HTML لو نمی‌رود؛ فقط پس از ورود موفق از سرور برگردانده می‌شود
@@ -650,7 +679,9 @@ export default {
           // ورود واقعی: بدون کوکی نشست معتبر، پنل نمایش داده نمی‌شود (رفع باگ رمز/امنیت)
           const sessionOk = await verifyAdminSession(env, readCookie('mili_auth'));
           if (!sessionOk) {
-            return await loginPageResponse();
+            // ورود مستقیم به مسیر مدیریت، مودال را همان‌جا باز می‌کند؛ ریشه/عمومی
+            // فقط با کلیک Workspace Sign In مودال را نشان می‌دهد.
+            return await loginPageResponse({ directGate: true });
           }
 
           const diag = await getStorageDiagnostics(env);
@@ -709,7 +740,7 @@ export default {
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           'Cache-Control': 'no-store',
-          'Server': 'nginx'
+          'X-Robots-Tag': 'noindex, nofollow, noarchive'
         }
       });
     }

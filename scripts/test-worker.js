@@ -292,9 +292,31 @@ async function runTests() {
     const emptyEnv = { u: adminUuid };
     const rootResp = await worker.fetch(new Request('https://mili.example.com/'), emptyEnv, {});
     assert.strictEqual(rootResp.status, 200, 'صفحه اصلی بدون D1 باید با کد 200 باز شود');
+    assert.strictEqual(rootResp.headers.get('Server'), null, 'ریشه نباید هدر جعلی Server داشته باشد');
+    assert.strictEqual(rootResp.headers.get('X-Powered-By'), null, 'ریشه نباید هدر جعلی X-Powered-By داشته باشد');
+    assert.strictEqual(rootResp.headers.get('X-Robots-Tag'), 'noindex, nofollow, noarchive', 'ریشه باید noindex باشد');
     const rootHtml = await rootResp.text();
-    assert.ok(rootHtml.includes('MILICONFIG'), 'برند MILICONFIG باید در صفحه ورود وجود داشته باشد');
-    assert.ok(rootHtml.includes('حالت موقت'), 'صفحهٔ ورود بدون D1 باید هشدار حالت موقت را نشان دهد');
+    assert.ok(rootHtml.includes('StudioDocs'), 'برند StudioDocs باید در صفحهٔ استاتیک ریشه وجود داشته باشد');
+    assert.ok(rootHtml.includes('Static Asset &amp; Web Vitals Monitor'), 'عنوان مانیتور باید در صفحهٔ ریشه باشد');
+    assert.ok(rootHtml.includes('name="robots" content="noindex, nofollow, noarchive"'), 'متاتگ robots باید روی ریشه باشد');
+    assert.ok(rootHtml.includes('حالت موقت'), 'صفحهٔ ریشه بدون D1 باید هشدار حالت موقت را نشان دهد');
+    assert.ok(!/Welcome to nginx|Server at .* Port 80/i.test(rootHtml), 'قالب جعلی nginx نباید باقی بماند');
+    assert.ok(!/setTimeout\s*\([^)]*3000/.test(rootHtml), 'تایمر باز شدن خودکار فرم ورود نباید وجود داشته باشد');
+    assert.ok(/var DIRECT_GATE = false/.test(rootHtml), 'ریشه باید مودال را فقط با کلیک باز کند');
+
+    const loginPageResp = await worker.fetch(new Request('https://mili.example.com/login'), emptyEnv, {});
+    assert.strictEqual(loginPageResp.status, 200, 'مسیر /login باید صفحهٔ ورود را برگرداند');
+    assert.strictEqual(loginPageResp.headers.get('Server'), null, '/login نباید هدر جعلی Server داشته باشد');
+    assert.strictEqual(loginPageResp.headers.get('X-Robots-Tag'), 'noindex, nofollow, noarchive', '/login باید noindex باشد');
+    const loginHtml = await loginPageResp.text();
+    assert.ok(/var DIRECT_GATE = true/.test(loginHtml), '/login باید مودال را مستقیم باز کند');
+
+    const ipsAnonymous = await worker.fetch(new Request('https://mili.example.com/ips'), emptyEnv, {});
+    assert.strictEqual(ipsAnonymous.status, 404, '/ips بدون نشست یا توکن باید 404 باشد');
+    const ipsToken = await worker.fetch(new Request(`https://mili.example.com/ips?token=${adminUuid}`), emptyEnv, {});
+    assert.strictEqual(ipsToken.status, 200, '/ips با توکن معتبر باید در دسترس باشد');
+    const ipsJsonAnonymous = await worker.fetch(new Request('https://mili.example.com/ips.json'), emptyEnv, {});
+    assert.strictEqual(ipsJsonAnonymous.status, 404, '/ips.json بدون توکن باید 404 باشد');
     const noD1Create = await worker.fetch(new Request(`https://mili.example.com/${adminUuid}/api/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -312,7 +334,8 @@ async function runTests() {
     const adminResp = await worker.fetch(new Request(`https://mili.example.com/${adminUuid}`), d1Env, {});
     assert.strictEqual(adminResp.status, 200, 'پنل مدیریت با D1 باید با کد 200 باز شود');
     const adminHtml = await adminResp.text();
-    assert.ok(adminHtml.includes('MILICONFIG'), 'پنل مدیریت باید شامل برند باشد');
+    assert.ok(adminHtml.includes('StudioDocs'), 'صفحهٔ ورود مسیر مدیریت باید شامل برند باشد');
+    assert.ok(/var DIRECT_GATE = true/.test(adminHtml), 'مسیر مدیریت مستقیم مودال ورود را باز می‌کند');
     console.log('  ✓ تست ۲ (پنل مدیریت OS و ساخت خودکار جداول D1): موفق');
 
     // تست ۳: سیستم رمز عبور مدیر، محافظت از مسیرهای ادمین و جلوگیری از حملات Brute-Force
