@@ -15,7 +15,7 @@ import {
 } from '../config/defaults.js';
 import { buildRandomUserAddressMix, buildUserDefaultConfig, USER_PRESETS } from '../config/presets.js';
 import { ensureSubscriptionPortVariety } from '../config/defaults.js';
-import { generateShortId, generateUuidV4, isValidUuid, sha256Hex, timingSafeEqualStr } from '../core/utils.js';
+import { generateShortId, generateUuidV4, getRandomBytesSafe, isValidUuid, sha256Hex, timingSafeEqualStr } from '../core/utils.js';
 
 // حافظه کش داخلی هر Isolate جهت کارکرد بدون وقفه و حداکثر سرعت
 const memoryStore = {
@@ -33,7 +33,8 @@ const memoryStore = {
   lastD1WriteAt: 0,
   lastD1WriteError: null,
   adminPasswordHash: '',
-  adminPath: ''
+  adminPath: '',
+  camouflageSite: ''
 };
 let schemaInitPromise = null;
 
@@ -135,53 +136,81 @@ function generateSeedUuid() {
   return generateUuidV4();
 }
 
+// مسیر مدیریت تمیز و غیر-UUID: یک اسلاگ رندوم ۲۴ کاراکتری برای هر نصب.
+// UUID فقط برای اعتبارنامهٔ پروتکل کلاینت است و دیگر در آدرس پنل/ساب دیده نمی‌شود.
+function generateAdminPathValue() {
+  const bytes = getRandomBytesSafe(12);
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return `panel-${hex}`;
+}
+
+// مسیرهای قدیمی/حدس‌پذیر (UUID، admin، panel و...) در اولین اجرا به مسیر رندوم
+// منتقل می‌شوند. مسیر دلخواه طولانی کاربر (مثل my-control-room) دست نمی‌خورد.
+function isLegacyAdminPathValue(value = '') {
+  const clean = String(value || '').trim().toLowerCase();
+  if (!clean) return false;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(clean)) return true;
+  if (['admin', 'panel', 'dashboard', 'manage', 'login', 'control'].includes(clean)) return true;
+  return clean.length < 8;
+}
+
+async function saveAdminPathValues(env, adminPath, legacyPath = '') {
+  const detectedD1 = detectD1Binding(env);
+  const detectedKv = detectKvBinding(env);
+  const now = Date.now();
+  if (detectedD1 && memoryStore.d1SchemaReady) {
+    try {
+      const rows = [[ 'admin_path', adminPath ]];
+      if (legacyPath) rows.push(['admin_path_legacy', legacyPath]);
+      await detectedD1.db.batch(rows.map(([key, value]) => detectedD1.db.prepare(
+        'INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at'
+      ).bind(key, value, now)));
+    } catch (_e) {}
+  }
+  if (detectedKv) {
+    try { await detectedKv.kv.put('admin_path', adminPath); } catch (_e) {}
+    if (legacyPath) { try { await detectedKv.kv.put('admin_path_legacy', legacyPath); } catch (_e) {} }
+  }
+}
+
 // مسیر مدیریت بدون UUID پیش‌فرض عمومی:
-// اگر متغیر محیطی u/UUID تنظیم نشده باشد، یک UUID رندوم یکتا برای همین نصب ساخته
+// اگر متغیر محیطی u/UUID تنظیم نشده باشد، یک اسلاگ رندوم یکتا برای همین نصب ساخته
 // و در D1/KV ذخیره می‌شود؛ بنابراین هیچ مسیر قابل حدسی روی استقرار وجود ندارد.
 export async function getOrCreateAdminPath(env = {}) {
   const envValue = env?.u || env?.U || env?.UUID || env?.uuid;
-  if (envValue && String(envValue).trim()) {
-    return String(envValue).trim().toLowerCase();
-  }
-  if (memoryStore.adminPath) return memoryStore.adminPath;
+  const envPath = String(envValue || '').trim().toLowerCase();
+  // مسیر صریح و امن محیطی همیشه اولویت دارد.
+  if (envPath && !isLegacyAdminPathValue(envPath)) return envPath;
+  if (memoryStore.adminPath && !isLegacyAdminPathValue(memoryStore.adminPath)) return memoryStore.adminPath;
+  if (memoryStore.adminPath) memoryStore.adminPath = '';
 
   await ensureD1Schema(env);
   const key = 'admin_path';
   const detectedD1 = detectD1Binding(env);
+  const detectedKv = detectKvBinding(env);
+  let stored = '';
   if (detectedD1 && memoryStore.d1SchemaReady) {
     try {
       const row = await detectedD1.db.prepare('SELECT value FROM system_config WHERE key = ?').bind(key).first();
-      if (row && row.value) {
-        memoryStore.adminPath = String(row.value).trim().toLowerCase();
-        return memoryStore.adminPath;
-      }
+      if (row && row.value) stored = String(row.value).trim().toLowerCase();
     } catch (_e) {}
   }
-
-  const detectedKv = detectKvBinding(env);
-  if (detectedKv) {
+  if (!stored && detectedKv) {
     try {
       const kvVal = await detectedKv.kv.get(key);
-      if (kvVal) {
-        memoryStore.adminPath = String(kvVal).trim().toLowerCase();
-        return memoryStore.adminPath;
-      }
+      if (kvVal) stored = String(kvVal).trim().toLowerCase();
     } catch (_e) {}
   }
+  // مسیر ذخیره‌شدهٔ امن (panel-…) پایدار می‌ماند؛ مهم نیست env قدیمی چه بوده.
+  if (stored && !isLegacyAdminPathValue(stored)) {
+    memoryStore.adminPath = stored;
+    return stored;
+  }
 
-  const generated = generateUuidV4();
+  const legacyPath = isLegacyAdminPathValue(stored) ? stored : (isLegacyAdminPathValue(envPath) ? envPath : '');
+  const generated = generateAdminPathValue();
   memoryStore.adminPath = generated;
-
-  if (detectedD1 && memoryStore.d1SchemaReady) {
-    try {
-      await detectedD1.db.prepare(
-        'INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at'
-      ).bind(key, generated, Date.now()).run();
-    } catch (_e) {}
-  }
-  if (detectedKv) {
-    try { await detectedKv.kv.put(key, generated); } catch (_e) {}
-  }
+  await saveAdminPathValues(env, generated, legacyPath);
   return generated;
 }
 
@@ -202,7 +231,7 @@ export async function verifyAdminSession(env = {}, token = '') {
 // چرخش مسیر مدیریت: تولید UUID جدید و ذخیره آن (امکان تغییر مسیر در هر زمان)
 export async function rotateAdminPath(env = {}) {
   await ensureD1Schema(env);
-  const generated = generateUuidV4();
+  const generated = generateAdminPathValue();
   memoryStore.adminPath = generated;
 
   const detectedD1 = detectD1Binding(env);
@@ -221,10 +250,61 @@ export async function rotateAdminPath(env = {}) {
   return generated;
 }
 
+// پوستهٔ سایت عمومی: یک‌بار برای هر استقرار انتخاب و ذخیره می‌شود تا ریشه
+// همیشه همان سایت واقعی/رندوم را نشان دهد، نه صفحهٔ ورود پنل.
+export async function getOrCreateCamouflageSite(env = {}, choices = []) {
+  const list = (Array.isArray(choices) ? choices : []).map(String).filter(Boolean);
+  if (!list.length) return '';
+  const envChoice = String(env?.SITE_SKIN || env?.CAMOUFLAGE_SITE || '').trim().toLowerCase();
+  if (envChoice && list.includes(envChoice)) return envChoice;
+  if (memoryStore.camouflageSite && list.includes(memoryStore.camouflageSite)) return memoryStore.camouflageSite;
+
+  await ensureD1Schema(env);
+  const key = 'camouflage_site';
+  const detectedD1 = detectD1Binding(env);
+  if (detectedD1 && memoryStore.d1SchemaReady) {
+    try {
+      const row = await detectedD1.db.prepare('SELECT value FROM system_config WHERE key = ?').bind(key).first();
+      const value = String(row?.value || '').trim().toLowerCase();
+      if (value && list.includes(value)) {
+        memoryStore.camouflageSite = value;
+        return value;
+      }
+    } catch (_e) {}
+  }
+  const detectedKv = detectKvBinding(env);
+  if (detectedKv) {
+    try {
+      const value = String(await detectedKv.kv.get(key) || '').trim().toLowerCase();
+      if (value && list.includes(value)) {
+        memoryStore.camouflageSite = value;
+        return value;
+      }
+    } catch (_e) {}
+  }
+
+  const bytes = getRandomBytesSafe(4);
+  const idx = bytes.reduce((acc, b) => (acc * 256 + b) % list.length, 0);
+  const chosen = list[idx] || list[0];
+  memoryStore.camouflageSite = chosen;
+  if (detectedD1 && memoryStore.d1SchemaReady) {
+    try {
+      await detectedD1.db.prepare(
+        'INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at'
+      ).bind(key, chosen, Date.now()).run();
+    } catch (_e) {}
+  }
+  if (detectedKv) {
+    try { await detectedKv.kv.put(key, chosen); } catch (_e) {}
+  }
+  return chosen;
+}
+
 // ساخت خودکار جداول D1 (Auto-Migration)
 // ستون‌های جدول users به‌تفکیک نوع — برای جدول‌هایی که با اسکیمای قدیمی‌تر
 // ساخته شده‌اند و ALTER TABLE لازم دارند.
 const USER_TABLE_COLUMNS = {
+  sub_key: "TEXT NOT NULL DEFAULT ''",
   sub_node_count: 'INTEGER NOT NULL DEFAULT 0',
   status: "TEXT NOT NULL DEFAULT 'active'",
   enabled: 'INTEGER NOT NULL DEFAULT 1',
@@ -305,6 +385,13 @@ export async function ensureD1Schema(env = {}, force = false) {
   schemaInitPromise = _runEnsureD1Schema(env, db, bindingName, force);
   try {
     return await schemaInitPromise;
+  } catch (err) {
+    // خطای موقت D1 (محدودیت، قطعی شبکه یا مهاجرت نیمه‌کاره) نباید کل ورکر را
+    // با 1101 از کار بیندازد؛ پنل روی حافظهٔ امن ادامه می‌دهد و درخواست بعدی
+    // دوباره تلاش می‌کند. علت برای تشخیص در پنل نگه داشته می‌شود.
+    memoryStore.d1SchemaReady = false;
+    memoryStore.d1Error = 'schema: ' + (err?.message || String(err));
+    return { d1Enabled: true, bindingName, migrated: false, error: memoryStore.d1Error };
   } finally {
     schemaInitPromise = null;
   }
@@ -313,7 +400,7 @@ export async function ensureD1Schema(env = {}, force = false) {
 // نسخهٔ اسکیما: با هر تغییر ستون/جدول یک عدد بالا می‌رود تا دیتابیس‌های قدیمی
 // که کاربر دارند هم مهاجرت شوند. قبلاً مسیر سریع هنگام وجود کاربر، مهاجرت را
 // کامل رد می‌کرد و ستون‌های تازه در D1 ساخته نمی‌شدند (باگ ذخیره‌نشدن).
-const D1_SCHEMA_VERSION = '4';
+const D1_SCHEMA_VERSION = '5';
 
 async function _runEnsureD1Schema(env, db, bindingName, force) {
   let hasUsers = false;
@@ -331,7 +418,9 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
       const stored = {};
       for (const r of cfgRows) {
         if (!r || !r.key) continue;
-        if (r.key === 'admin_path' && r.value) memoryStore.adminPath = String(r.value).trim().toLowerCase();
+        if (r.key === 'admin_path' && r.value && !isLegacyAdminPathValue(r.value)) {
+          memoryStore.adminPath = String(r.value).trim().toLowerCase();
+        }
         if (r.key === 'admin_password_hash' && r.value) memoryStore.adminPasswordHash = String(r.value).trim();
         if (r.key === 'schema_version' && r.value) schemaVersion = String(r.value).trim();
         if (r.key === 'cf_token' || r.key === 'schema_version' || r.key.startsWith('secret_')) continue;
@@ -369,6 +458,7 @@ async function _runEnsureD1Schema(env, db, bindingName, force) {
     `CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL,
+      sub_key TEXT NOT NULL DEFAULT '',
       uuid TEXT NOT NULL UNIQUE,
       sub_node_count INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'active',
@@ -543,6 +633,59 @@ function ensureMemorySeeded(env = {}) {
   }
 }
 
+// کلید اشتراک عمومی: از نام کاربر ساخته می‌شود، نه UUID. نام‌های فارسی/یونیکد
+// مجازند و فقط فاصله/کاراکترهای ناامن URL به خط تیره تبدیل می‌شوند. خروجی پایدار
+// است و getUserByIdOrToken همان کلید را برای پیدا کردن کاربر می‌پذیرد.
+export function buildUserSubKey(value = '') {
+  const normalized = String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\u200c]+/g, '-')
+    .replace(/[^\p{L}\p{N}-]+/gu, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized.slice(0, 48) || 'user';
+}
+
+// کلیدهای نام‌محور باید یکتا باشند. برای نام تکراری، پسوند عددی اضافه می‌شود تا
+// دو کاربر هرگز یک ساب‌لینک مشترک نگیرند. ترتیب بر اساس زمان ساخت است تا کلید
+// کاربران قدیمی با هر بار خواندن تغییر نکند.
+function assignUserSubKeys(users = []) {
+  const used = new Set();
+  const ordered = [...users].sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+  for (const user of ordered) {
+    if (!user) continue;
+    const base = buildUserSubKey(user.username || user.id || 'user');
+    // کلید ذخیره‌شده حفظ می‌شود تا با حذف/تغییر نام کاربر دیگران، آدرس ساب
+    // کاربران دیگر جابه‌جا نشود؛ فقط اگر خالی یا تکراری باشد کلید تازه ساخته می‌شود.
+    let key = buildUserSubKey(user.subKey || '') || base;
+    if (used.has(key)) {
+      key = base;
+      let suffix = 2;
+      while (used.has(key)) key = `${base}-${suffix++}`;
+    }
+    used.add(key);
+    if (user.subKey !== key) {
+      user.subKey = key;
+      user._subKeyDirty = true;
+    }
+  }
+  return users;
+}
+
+// کلیدهای ساب را بعد از تخصیص در D1 تثبیت می‌کند؛ بدون این کار با حذف یک
+// کاربر، پسوند کاربر بعدی عوض می‌شد و لینک ساب او می‌شکست.
+async function persistUserSubKeys(db, users = []) {
+  if (!db || typeof db.batch !== 'function') return;
+  const dirty = users.filter(u => u && u._subKeyDirty && u.subKey);
+  if (!dirty.length) return;
+  try {
+    await db.batch(dirty.map(u => db.prepare('UPDATE users SET sub_key = ? WHERE id = ?').bind(u.subKey, u.id)));
+    for (const u of dirty) delete u._subKeyDirty;
+  } catch (_e) {}
+}
+
 function mapUserRow(row) {
   if (!row) return null;
   let parsedConfig = {};
@@ -561,9 +704,11 @@ function mapUserRow(row) {
   });
   const uid = String(row.id);
   const pending = memoryStore.pendingUserFlush.get(uid) || { bytes: 0, reqs: 0 };
+  const username = String(row.username || row.id);
   return {
     id: uid,
-    username: String(row.username || row.id),
+    username,
+    subKey: String(row.sub_key || '').trim() || buildUserSubKey(username || uid),
     uuid: String(row.uuid || '').toLowerCase(),
     subNodeCount,
     status: String(row.status || 'active'),
@@ -707,7 +852,9 @@ export async function loadGlobalConfig(env = {}, force = false) {
       for (const r of rows) {
         // کلیدهای محرمانه (توکن بروزرسانی) وارد پیکربندی عمومی نمی‌شوند
         if (!r || !r.key) continue;
-        if (r.key === 'admin_path' && r.value) memoryStore.adminPath = String(r.value).trim().toLowerCase();
+        if (r.key === 'admin_path' && r.value && !isLegacyAdminPathValue(r.value)) {
+          memoryStore.adminPath = String(r.value).trim().toLowerCase();
+        }
         if (r.key === 'admin_password_hash' && r.value) memoryStore.adminPasswordHash = String(r.value).trim();
         if (r.key === 'cf_token' || r.key === 'schema_version' || r.key.startsWith('secret_')) continue;
         stored[r.key] = r.value;
@@ -865,19 +1012,23 @@ export async function listUsers(env = {}, force = false) {
 
   if (detectedD1 && memoryStore.d1SchemaReady) {
     if (!force && memoryStore.lastUsersSyncAt > 0 && Date.now() - memoryStore.lastUsersSyncAt < 15000 && memoryStore.users.size > 0) {
+      assignUserSubKeys([...memoryStore.users.values()]);
       return Array.from(memoryStore.users.values()).sort((a, b) => b.createdAt - a.createdAt);
     }
     try {
       const res = await detectedD1.db.prepare(`SELECT * FROM users ORDER BY created_at DESC`).all();
       const users = (res?.results || []).map(mapUserRow).filter(Boolean);
+      assignUserSubKeys(users);
+      await persistUserSubKeys(detectedD1.db, users);
       memoryStore.users.clear();
       for (const u of users) memoryStore.users.set(u.id, u);
       memoryStore.lastUsersSyncAt = Date.now();
-      return users;
+      return users.sort((a, b) => b.createdAt - a.createdAt);
     } catch (_e) {}
   }
 
   ensureMemorySeeded(env);
+  assignUserSubKeys([...memoryStore.users.values()]);
   return Array.from(memoryStore.users.values()).sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -891,6 +1042,8 @@ export async function getUserByIdOrToken(env = {}, token = '') {
       u.id.toLowerCase() === cleanLower ||
       u.uuid.toLowerCase() === cleanLower ||
       u.username.toLowerCase() === cleanLower ||
+      String(u.subKey || '').toLowerCase() === cleanLower ||
+      buildUserSubKey(u.username) === cleanLower ||
       (u.config?.d && u.config.d.trim().replace(/^\/+|\/+$/g, '').toLowerCase() === cleanLower)
     ) {
       return u;
@@ -1023,6 +1176,7 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
   const userObj = {
     id,
     username,
+    subKey: buildUserSubKey(username || id),
     uuid,
     subNodeCount,
     status: enabled ? 'active' : 'disabled',
@@ -1044,6 +1198,9 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
     updatedAt: now
   };
 
+  // کلید نام‌محور همین‌جا یکتا می‌شود تا ردیف D1 از ابتدا پسوند درست داشته باشد
+  // و لینک /sub/name با کاربر تکراری به شخص اشتباه نرسد.
+  assignUserSubKeys([...memoryStore.users.values(), userObj]);
   memoryStore.users.set(id, userObj);
   memoryStore.lastUsersSyncAt = now;
 
@@ -1053,14 +1210,15 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
       await safeBind(
         detectedD1.db.prepare(
           `INSERT INTO users (
-            id, username, uuid, sub_node_count, status, enabled,
+            id, username, sub_key, uuid, sub_node_count, status, enabled,
             data_limit_gb, used_bytes, lifetime_bytes, request_count,
             expire_days, expire_at, start_on_first_use, first_connected_at,
             ip_limit, node_scope, preset, note, config_json, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ),
         userObj.id,
         userObj.username,
+        userObj.subKey || buildUserSubKey(userObj.username || userObj.id),
         userObj.uuid,
         userObj.subNodeCount,
         userObj.status,
@@ -1094,6 +1252,7 @@ export async function createUser(env = {}, payload = {}, clientIp = '') {
     throw new Error('ذخیرهٔ کاربر در D1 ناموفق بود: ' + insertError);
   }
 
+  assignUserSubKeys([...memoryStore.users.values()]);
   await addAuditLog(env, 'ساخت کاربر جدید', `${userObj.username} (${currentUsers.length + 1}/3)`, clientIp);
   return userObj;
 }
@@ -1184,20 +1343,23 @@ export async function updateUser(env = {}, userId, payload = {}, clientIp = '') 
     updatedAt: now
   };
 
+  updated.subKey = buildUserSubKey(updated.username || updated.id);
   memoryStore.users.set(existing.id, updated);
   memoryStore.lastUsersSyncAt = now;
+  assignUserSubKeys([...memoryStore.users.values()]);
 
   if (detectedD1) {
     try {
       await safeBind(
         detectedD1.db.prepare(
           `UPDATE users SET
-            username = ?, uuid = ?, sub_node_count = ?, status = ?, enabled = ?,
+            username = ?, sub_key = ?, uuid = ?, sub_node_count = ?, status = ?, enabled = ?,
             data_limit_gb = ?, expire_days = ?, expire_at = ?, start_on_first_use = ?,
             ip_limit = ?, node_scope = ?, preset = ?, note = ?, config_json = ?, updated_at = ?
            WHERE id = ?`
         ),
         updated.username,
+        updated.subKey,
         updated.uuid,
         updated.subNodeCount,
         updated.status,
@@ -1556,6 +1718,7 @@ export async function importFullBackup(env = {}, payload = {}, clientIp = '') {
       if (!u || typeof u !== 'object') continue;
       const id = String(u.id || generateShortId('mili')).trim();
       const username = String(u.username || id).trim();
+      const subKey = buildUserSubKey(u.subKey || username);
       if (memoryStore.users.size >= MAX_USERS_LIMIT && !memoryStore.users.has(id)) {
         usersFailed++;
         failures.push(`کاربر «${username}»: سقف ${MAX_USERS_LIMIT} کاربر تکمیل است`);
@@ -1598,13 +1761,14 @@ export async function importFullBackup(env = {}, payload = {}, clientIp = '') {
         await safeBind(
           detectedD1.db.prepare(
             `INSERT INTO users (
-              id, username, uuid, sub_node_count, status, enabled,
+              id, username, sub_key, uuid, sub_node_count, status, enabled,
               data_limit_gb, used_bytes, lifetime_bytes, request_count,
               expire_days, expire_at, start_on_first_use, ip_limit,
               node_scope, preset, config_json, note, first_connected_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               username = excluded.username,
+              sub_key = excluded.sub_key,
               uuid = excluded.uuid,
               sub_node_count = excluded.sub_node_count,
               status = excluded.status,
@@ -1624,7 +1788,7 @@ export async function importFullBackup(env = {}, payload = {}, clientIp = '') {
               first_connected_at = excluded.first_connected_at,
               updated_at = excluded.updated_at`
           ),
-          id, username, uuid, subNodeCount, status, enabled ? 1 : 0,
+          id, username, subKey, uuid, subNodeCount, status, enabled ? 1 : 0,
           dataLimitGb, usedBytes, lifetimeBytes, requestCount,
           expireDays, expireAt, startOnFirstUse ? 1 : 0, ipLimit,
           nodeScope, preset, JSON.stringify(config), note, firstConnectedAt,

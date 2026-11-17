@@ -3000,6 +3000,7 @@ ${PWA_HEAD_TAGS}
   .preset-orb-btn.orb-iran-heavy { --orb-color: #c084fc; --orb-rgb: 192, 132, 252; animation-delay: 0.7s; }
   .preset-orb-btn.orb-multi { --orb-color: #fbbf24; --orb-rgb: 251, 191, 36; animation-delay: 1.05s; }
   .preset-orb-btn.orb-intl { --orb-color: #fb7185; --orb-rgb: 251, 113, 133; animation-delay: 1.4s; }
+  .preset-orb-btn.orb-nexus { --orb-color: #22d3ee; --orb-rgb: 34, 211, 238; animation-delay: 1.25s; }
   /* دکمهٔ گرد وب‌پروکسی تلگرام، هم‌اندازه و هم‌سبک دکمه‌های ساخت سریع کاربر */
   .preset-orb-btn.orb-tg-proxy { --orb-color: #38bdf8; --orb-rgb: 56, 189, 248; animation-delay: 1.75s; }
   body.light-mode .preset-orb-btn {
@@ -3689,6 +3690,7 @@ ${PWA_HEAD_TAGS}
             <button class="preset-orb-btn orb-iran-heavy" type="button" data-act="quick-preset-user" data-preset="iran-heavy" title="ساخت سریع کاربر: مصرف سنگین — VLESS + Trojan، فرگمنت ایرانسل، خروجی ترکیه" aria-label="مصرف سنگین">${icon('lock')}</button>
             <button class="preset-orb-btn orb-multi" type="button" data-act="quick-preset-user" data-preset="multi-location" title="ساخت سریع کاربر: چندلوکیشن واقعی — خروجی هر نود از ProxyIP کشور خودش، VLESS + Trojan + SS" aria-label="چندلوکیشن واقعی">${icon('globe')}</button>
             <button class="preset-orb-btn orb-intl" type="button" data-act="quick-preset-user" data-preset="international" title="ساخت سریع کاربر: بین‌المللی — بدون فرگمنت، WARP MASQUE، خروجی مستقیم" aria-label="بین‌المللی">${icon('signal')}</button>
+            <button class="preset-orb-btn orb-nexus" type="button" data-act="quick-preset-user" data-preset="nexus-clean" title="ساخت سریع کاربر: Nexus — آی‌پی تمیز، خروجی آلمان، VLESS + Trojan" aria-label="Nexus تمیز">${icon('server')}</button>
             <button class="preset-orb-btn orb-tg-proxy" type="button" data-act="open-tg-proxy" title="مدیریت پروکسی تلگرام (وب‌پروکسی)" aria-label="پروکسی تلگرام">${icon('telegram')}</button>
           </div>
           <div class="user-grid" id="usersGrid"></div>
@@ -3827,7 +3829,7 @@ ${PWA_HEAD_TAGS}
         <div class="backup-pane is-active" data-backup-pane="download">
           <div class="card">
             <h3>${icon('download')} تهیهٔ بکاپ کامل از کل پنل (ویژه ادمین)</h3>
-            <p class="help-lead" style="margin-bottom:10px;">شامل تمامی کاربران، شناسه‌های UUID، حجم مصرفی و تعداد ریکوئست‌ها، تنظیمات اختصاصی هر کاربر، تنظیمات کلی هسته، و سکرت و آمار پروکسی تلگرام.</p>
+            <p class="help-lead" style="margin-bottom:10px;">شامل تمامی کاربران، نام و شناسهٔ پروتکل، حجم مصرفی و تعداد ریکوئست‌ها، تنظیمات اختصاصی هر کاربر، تنظیمات کلی هسته، و سکرت و آمار پروکسی تلگرام.</p>
             <div class="toolbar">
               <button class="btn primary" type="button" data-act="download-admin-backup">${icon('download')} دانلود فایل بکاپ کامل (JSON)</button>
               <button class="btn" type="button" data-act="copy-admin-backup">${icon('copy')} کپی بکاپ کامل در حافظه</button>
@@ -3860,7 +3862,7 @@ ${PWA_HEAD_TAGS}
         <div class="backup-pane" data-backup-pane="users">
           <div class="card">
             <h3>${icon('users')} دانلود بکاپ تکی هر کاربر</h3>
-            <p class="help-lead" style="margin-bottom:8px;">هر کاربر نیز در هدر صفحهٔ وضعیت اختصاصی خود (<code>/status/UUID</code>) دکمهٔ مستقیم «بکاپ اشتراک» دارد. همچنین از اینجا می‌توانید بکاپ هر کاربر را جداگانه دریافت کنید:</p>
+            <p class="help-lead" style="margin-bottom:8px;">هر کاربر نیز در هدر صفحهٔ وضعیت اختصاصی خود (<code>/status/&lt;نام-کاربر&gt;</code>) دکمهٔ مستقیم «بکاپ اشتراک» دارد. همچنین از اینجا می‌توانید بکاپ هر کاربر را جداگانه دریافت کنید:</p>
             <div class="toolbar" id="backupUsersList"></div>
           </div>
         </div>
@@ -4311,7 +4313,7 @@ ${PWA_HEAD_TAGS}
             <div class="help-card">
               <h4>${icon('link')} آدرس اصلی</h4>
               <ul>
-                <li>ساختار: <span class="help-kbd">/sub/شناسه</span> که شناسه همان UUID کاربر است.</li>
+                <li>ساختار: <span class="help-kbd">/sub/نام-کاربر</span>؛ آدرس ساب از نام کاربر ساخته می‌شود و هیچ UUID در آن نیست.</li>
                 <li>این آدرس خودش فرمت مناسب کلاینت را انتخاب می‌کند.</li>
                 <li>لینک را کامل کپی کن؛ حتی یک حرف کم، ساب را خراب می‌کند.</li>
               </ul>
@@ -4548,7 +4550,7 @@ ${PWA_HEAD_TAGS}
     try { var r = window.confirm(msg); if (typeof r === 'boolean') return r; } catch (e) {}
     return true;
   }
-  function userKey(u) { return (u && (u.uuid || u.id)) || ''; }
+  function userKey(u) { return (u && (u.subKey || u.username || u.id)) || ''; }
   function escHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
   // نصب اپ: اگر مرورگر رویداد نصب داده باشد پنجرهٔ نصب باز می‌شود، وگرنه
@@ -4691,8 +4693,8 @@ ${PWA_HEAD_TAGS}
       var used = Number(u.usedBytes || 0);
       var limitGb = Number(u.dataLimitGb || 0);
       var pct = limitGb > 0 ? Math.min(100, Math.round((used / (limitGb * 1073741824)) * 100)) : 0;
-      var base = origin() + '/sub/' + userKey(u);
-      var statusUrl = origin() + '/status/' + userKey(u);
+      var base = origin() + '/sub/' + encodeURIComponent(userKey(u));
+      var statusUrl = origin() + '/status/' + encodeURIComponent(userKey(u));
       var card = document.createElement('div');
       card.className = 'user-card';
       var nodeCount = Number(u.subNodeCount || 0);
@@ -4704,7 +4706,7 @@ ${PWA_HEAD_TAGS}
       card.innerHTML = [
         '<div class="user-head">',
           '<div><div class="user-name">' + escHtml(u.username || ('کاربر ' + (idx + 1))) + '</div>',
-          '<div class="user-uuid">/' + 'sub/' + key + '</div></div>',
+          '<div class="user-uuid">/' + 'sub/' + escHtml(key) + '</div></div>',
           '<span class="pill ' + (u.enabled ? 'on' : 'off') + '">' + (u.enabled ? t('card.active') : t('card.inactive')) + '</span>',
         '</div>',
         '<div class="usage"><span>' + t('card.usage') + ' <b class="mono" style="color:var(--neon)">' + tgpFormatBytes(used) + '</b> (' + fmtGb(used) + ' GB)</span><span>' + Number(u.requestCount || 0).toLocaleString('fa-IR') + ' درخواست · ' + (limitGb > 0 ? limitGb + ' GB' : t('card.unlimited')) + '</span></div>',
@@ -4752,9 +4754,9 @@ ${PWA_HEAD_TAGS}
   function renderLocations() {
     var grid = $('locGrid');
     if (!grid) return;
-    var base = origin() + '/sub/' + (userKey(state.users[0]) || ADMIN_PATH);
+    var token = userKey(state.users[0]) || ADMIN_PATH;
+    var base = origin() + '/sub/' + encodeURIComponent(token);
     var countries = INITIAL_DATA.countrySources || {};
-    var token = userKey(state.users[0]) || '';
     var ep = origin() + '/warp/' + encodeURIComponent(token);
     var html = '<div class="loc-card"><div><div class="loc-name">همه لوکیشن‌ها</div><div class="loc-meta">MULTI</div></div>' +
       '<div class="loc-acts"><button class="loc-act c-copy" type="button" data-act="copy" data-url="' + base + '?country=MULTI" title="کپی ساب" aria-label="کپی ساب">' + ICO.copy + '</button></div></div>' +
@@ -4815,7 +4817,7 @@ ${PWA_HEAD_TAGS}
         body: JSON.stringify(payload)
       }).then(function(res) { return res.json(); });
     };
-    send({ mode: ipv6 ? 'ipv6' : 'ipv4', country: code, limit: 8 })
+    send({ mode: ipv6 ? 'ipv6' : 'ipv4', country: code, limit: 8, engine: (state.config && state.config.sourceEngine) || 'cfnew' })
       .then(function(data) {
         if (!data.success || !data.proxies || !data.proxies.length) {
           if (status) { status.className = 'scan-status err'; status.textContent = data.message || 'آی‌پی سالمی پیدا نشد.'; }
@@ -4844,7 +4846,7 @@ ${PWA_HEAD_TAGS}
     var code = $('locRegion') ? $('locRegion').value : 'DE';
     var user = (state.users || []).filter(function(u) { return u.id === ($('locUser') ? $('locUser').value : ''); })[0] || state.users[0];
     var token = userKey(user) || ADMIN_PATH;
-    copyText(origin() + '/sub/' + token + '?country=' + code, 'ساب منطقهٔ ' + code + ' کپی شد');
+    copyText(origin() + '/sub/' + encodeURIComponent(token) + '?country=' + code, 'ساب منطقهٔ ' + code + ' کپی شد');
   }
 
   function fillSettings() {
@@ -5554,7 +5556,8 @@ ${PWA_HEAD_TAGS}
       title: 'آدرس‌ها و منطقه',
       icon: 'pin',
       fields: [
-        { key: 'placement', section: 'منطقه', label: 'منطقهٔ خروجی — Cloudflare Placement', type: 'select', def: 'auto', options: 'placementRegions', hint: 'این انتخاب فقط Placement، کد Colo و مسیر خروج را کنترل می‌کند؛ آدرس نودها همان استخر ۶۹۶ آی‌پی یا آدرس‌های دستی باقی می‌ماند. «خودکار» از request.cf.colo استفاده می‌کند.' },
+        { key: 'sourceEngine', section: 'منابع', label: 'موتور منابع آی‌پی', type: 'select', def: 'cfnew', options: [['cfnew', 'CFnew — منابع و دامنه‌های رسمی cfnew'], ['nexus', 'Nexus — آی‌پی تمیز و ProxyIP کشوری']], hint: 'دکمه‌های آماده و لیست پیش‌فرض نودها از موتور انتخابی می‌آیند؛ yx و p همچنان ورودی دستی مستقل هستند.' },
+        { key: 'placement', section: 'منطقه', label: 'منطقهٔ خروجی — Cloudflare Placement', type: 'select', def: 'auto', options: 'placementRegions', hint: 'کشور خروجی با ProxyIP همان کشور اعمال می‌شود؛ انتخاب یک کشور باعث می‌شود همهٔ نودها از همان کشور خارج شوند. «خودکار» از request.cf.colo استفاده می‌کند. <span class="field-hint"><button class="btn sm" type="button" data-act="apply-cf-placement">' + ICO.pin + ' اعمال روی Cloudflare</button> <span id="cfPlacementStatus" style="margin-right:8px"></span></span>' },
         { key: 'ipMode', section: 'آی‌پی نود در کلاینت', label: 'حالت آی‌پی', type: 'select', def: 'country', options: [['country', 'کشور ثابت (آدرس‌ها از استخر تازه می‌شوند)'], ['fixed', 'آی‌پی ثابت (یک آدرس برای همهٔ نودها)']], hint: 'در حالت «آی‌پی ثابت»، با هر پینگ یا بروزرسانی ساب، آدرس و کشور خروجی نود عوض نمی‌شود؛ برای تضمین این ثبات، نودهای WARP در این حالت ساخته نمی‌شوند.' },
         { key: 'ipPinned', section: 'آی‌پی نود در کلاینت', label: 'آی‌پی ثابت دلخواه', type: 'text', def: '', ph: '104.16.0.1 یا 104.16.0.1:443 — خالی = انتخاب پایدار خودکار', hint: 'فقط در حالت «آی‌پی ثابت» استفاده می‌شود؛ خالی بماند، پنل خودش یک آدرس پایدار انتخاب می‌کند.' },
         { key: 'yx', section: 'آدرس‌های دستی', label: 'آدرس‌های دستی', type: 'textarea', rows: 4, wide: true, def: '', pool: true, ph: ['104.16.0.1:443#آلمان', '104.17.0.1:2053', '1.2.3.4', '[2606:4700::1]:443#آمریکا'].join(String.fromCharCode(10)), hint: 'هر آدرس در یک خط؛ هر قالبی که بخواهید قابل قبول است: <code>آی‌پی</code> · <code>آی‌پی:پورت</code> · <code>آی‌پی:پورت#نام</code> · <code>[آی‌پی نسخهٔ ۶]:پورت#نام</code> · <code>دامنه:پورت</code> — جدا کردن با کاما هم کار می‌کند.' },
@@ -5738,6 +5741,50 @@ ${PWA_HEAD_TAGS}
     return attrs;
   }
 
+  function applyCloudflarePlacement() {
+    var select = $('uf_placement');
+    var status = $('cfPlacementStatus');
+    var raw = select ? String(select.value || 'auto') : 'auto';
+    var payload = { mode: 'smart' };
+    if (raw === 'off') payload = { mode: 'off' };
+    else if (raw.indexOf('manual_placement:') === 0) {
+      var targetEl = $('cfPlacementTarget');
+      var target = targetEl ? String(targetEl.value || '') : '';
+      if (!target) { showToast('برای این منطقه هدف Cloudflare تعریف نشده است', 'err'); return; }
+      payload = { mode: 'targeted', region: target };
+    }
+    if (status) { status.textContent = 'در حال اعمال روی Cloudflare...'; }
+    api('/api/placement', { method: 'POST', body: JSON.stringify(payload) })
+      .then(function(data) {
+        if (status) status.textContent = data && data.message ? data.message : '';
+        showToast((data && data.message) || 'نتیجهٔ Placement دریافت شد', data && data.success ? 'ok' : 'err');
+      })
+      .catch(function() {
+        if (status) status.textContent = 'خطای شبکه در تماس با Cloudflare';
+        showToast('خطای شبکه در اعمال Placement', 'err');
+      });
+  }
+
+  function syncCloudflarePlacementTarget(value) {
+    var raw = String(value || 'auto');
+    var box = $('cfPlacementTarget');
+    if (!box) return;
+    var colo = raw.indexOf('manual_placement:') === 0 ? (raw.split(':')[1] || '').toUpperCase() : '';
+    var item = (INITIAL_DATA.placementRegions || []).filter(function(r) { return r.colo === colo; })[0];
+    if (!item) {
+      box.style.display = 'none';
+      if (box._miliWrap) box._miliWrap.style.display = 'none';
+      box.innerHTML = '<option value="">Cloudflare Smart Placement</option>';
+      return;
+    }
+    box.style.display = '';
+    if (box._miliWrap) box._miliWrap.style.display = '';
+    var previous = box.value;
+    box.innerHTML = item.targets.map(function(target) {
+      return '<option value="' + target + '"' + (target === previous ? ' selected' : '') + '>Cloudflare target: ' + target + '</option>';
+    }).join('');
+  }
+
   function placementTargetsHint(value) {
     var raw = String(value || 'auto');
     if (raw === 'off') return '<span class="field-hint">هیچ پارامتر Placement یا <code>pl</code> در مسیر نودها قرار نمی‌گیرد؛ فقط تنظیمات مسیر/تحریم‌شکن اعمال می‌شود.</span>';
@@ -5753,6 +5800,10 @@ ${PWA_HEAD_TAGS}
     var id = 'uf_' + field.key;
     var val = value === undefined || value === null ? field.def : value;
     var hint = field.hint ? '<span class="field-hint">' + field.hint + '</span>' : '';
+    if (field.key === 'placement') {
+      var hintExtra = '<select id="cfPlacementTarget" data-native="1" style="display:none;margin-top:6px;width:100%;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:rgba(0,0,0,.35);color:var(--text);font-family:var(--mono);font-size:.72rem;direction:ltr"><option value="">Cloudflare Smart Placement</option></select>';
+      hint += hintExtra;
+    }
     var wideClass = field.wide ? ' style="grid-column: 1 / -1;"' : '';
     var shell = fieldShellAttrs(field);
     if (field.type === 'textarea') {
@@ -5948,7 +5999,7 @@ ${PWA_HEAD_TAGS}
         return '<option value="' + k + '"' + (k === (presetId || (user && user.preset)) ? ' selected' : '') + '>' + p.title + '</option>';
       }).join('') + '</select></div>' +
       '<div class="field"><label>یادداشت</label><input type="text" id="uf_note" value="' + String((user && user.note) || '').replace(/"/g, '&quot;') + '"></div>' +
-      '<div class="field"><label>شناسهٔ کاربر (UUID)</label><input type="text" id="uf_uuid" class="mono" value="' + String((user && user.uuid) || '') + '" placeholder="خالی = ساخت خودکار"></div>' +
+      '<div class="field"><label>شناسهٔ پروتکل (اختیاری، داخلی)</label><input type="text" id="uf_uuid" class="mono" value="' + String((user && user.uuid) || '') + '" placeholder="خالی = ساخت خودکار"></div>' +
       '</div>' +
       '<div class="uf-section"><span>سهمیه و محدودیت</span><i></i></div>' +
       '<div class="form-grid">' +
@@ -5978,6 +6029,7 @@ ${PWA_HEAD_TAGS}
     updateFormSummary();
     if ($('userFormTitle')) $('userFormTitle').innerHTML = (user ? ICO.refresh + ' ویرایش کاربر «' + escHtml(user.username || '') + '»' : ICO.plus + ' ایجاد کاربر جدید');
     if ($('userFormSubmit')) $('userFormSubmit').innerHTML = user ? ICO.check + ' ذخیرهٔ تغییرات' : ICO.check + ' ساخت کاربر';
+    syncCloudflarePlacementTarget($('uf_placement') ? $('uf_placement').value : cfg.placement);
     enhanceCustomSelects(body);
     syncConditionalFields();
     syncProxyManualField(false);
@@ -6045,7 +6097,8 @@ ${PWA_HEAD_TAGS}
       'pages-iran': 'pages',
       'iran-heavy': 'heavy',
       'multi-location': 'multi',
-      'international': 'intl'
+      'international': 'intl',
+      'nexus-clean': 'nexus'
     }[presetId] || 'user';
     var idx = users.length + 1;
     var candidateName = 'mili-' + shortTag + '-' + idx;
@@ -6183,7 +6236,7 @@ ${PWA_HEAD_TAGS}
   function enhanceCustomSelects(root) {
     var scope = root || document;
     if (!scope.querySelectorAll) return;
-    scope.querySelectorAll('select').forEach(syncOneCustomSelect);
+    scope.querySelectorAll('select:not([data-native])').forEach(syncOneCustomSelect);
   }
 
   document.addEventListener('click', function(ev) {
@@ -6750,7 +6803,9 @@ ${PWA_HEAD_TAGS}
     var countryEl = $('sc_' + id + '_country');
     var limitEl = $('sc_' + id + '_limit');
     var familyEl = $('sc_' + id + '_family');
-    var payload = { country: countryEl ? countryEl.value : 'DE', limit: limitEl ? limitEl.value : '10' };
+    var targetUser = (state.users || []).filter(function(u) { return u.id === ($('scanUser') ? $('scanUser').value : ''); })[0];
+    var engine = (targetUser && targetUser.config && targetUser.config.sourceEngine) || (state.config && state.config.sourceEngine) || 'cfnew';
+    var payload = { country: countryEl ? countryEl.value : 'DE', limit: limitEl ? limitEl.value : '10', engine: engine };
     if (id === 'proxy') {
       payload.kind = 'proxy';
       payload.family = familyEl ? familyEl.value : 'any';
@@ -6925,7 +6980,7 @@ ${PWA_HEAD_TAGS}
   function testUserNodes(token) {
     if (!token) return;
     showToast(t('toast.testingNodes'), 'ok');
-    fetch(origin() + '/sub/' + token + '?target=raw&limit=6')
+    fetch(origin() + '/sub/' + encodeURIComponent(token) + '?target=raw&limit=6')
       .then(function(res) { return res.text(); })
       .then(function(text) {
         var nodes = [];
@@ -7297,6 +7352,7 @@ ${PWA_HEAD_TAGS}
     else if (act === 'save-password') { savePassword(); }
     else if (act === 'logout') { logout(); }
     else if (act === 'go-scan') { showPanel('scanner'); closeScanView(); }
+    else if (act === 'apply-cf-placement') { applyCloudflarePlacement(); }
     else if (act === 'add-node' || act === 'add-ip') { addNode(el.getAttribute('data-ip'), el.getAttribute('data-port')); }
     else if (act === 'use-proxy') { useProxy(el.getAttribute('data-proxy')); }
     else if (act === 'country-proxy') { countryProxy(el.getAttribute('data-code')); }
@@ -7440,6 +7496,14 @@ ${PWA_HEAD_TAGS}
     if (target.closest && target.closest('#createModal')) {
       updateFormSummary();
       syncConditionalFields();
+    }
+    if (target.id === 'uf_placement') {
+      syncCloudflarePlacementTarget(target.value);
+      var cfTargetSel = $('cfPlacementTarget');
+      if (cfTargetSel) {
+        rebuildCustomSelectOptions(cfTargetSel, true);
+        updateCustomSelectLabel(cfTargetSel);
+      }
     }
     if (target.id === 'uf_proxyRegion') syncProxyManualField(true);
     if (target.id === 'uf_proxyMode') syncProxyManualField(target.value === 'manual_proxyip');

@@ -24,16 +24,16 @@ const I18N = {
     loginBtn: 'ورود به مرکز مدیریت',
     setupBtn: 'ذخیره رمز و راه‌اندازی پنل',
     working: 'در حال بررسی...',
-    recovery: 'فراموشی رمز؟ بازیابی با UUID',
+    recovery: 'فراموشی رمز؟ بازیابی با مسیر مدیریت',
     setupDone: 'پنل با موفقیت راه‌اندازی شد',
     setupDoneHint: 'شناسه رندوم مدیریت شما (برای بازیابی رمز نگه دارید) — نیازی به وارد کردن آن نیست:',
     copyId: 'کپی شناسه',
     goPanel: 'ورود به صفحه مدیریت',
     idCopied: 'کپی شد',
-    recoveryTitle: 'بازیابی رمز با UUID مدیر',
-    recoveryHint: 'مسیر مدیریت (UUID) را وارد کنید؛ مالکیت این مسیر یعنی دسترسی مدیر.',
-    uuidLabel: 'UUID / مسیر مدیریت',
-    uuidPh: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    recoveryTitle: 'بازیابی رمز با مسیر مدیریت',
+    recoveryHint: 'مسیر مدیریت (panel-…) را وارد کنید؛ مالکیت این مسیر یعنی دسترسی مدیر.',
+    uuidLabel: 'مسیر مدیریت',
+    uuidPh: 'panel-xxxxxxxxxxxxxxxxxxxxxxxx',
     recoverBtn: 'بازیابی رمز',
     back: 'بازگشت به ورود',
     themeLight: 'حالت روز',
@@ -42,7 +42,7 @@ const I18N = {
     errMismatch: 'رمزهای عبور یکسان نیستند.',
     errShort: 'رمز عبور باید حداقل ۴ کاراکتر باشد.',
     errNetwork: 'خطای شبکه در برقراری ارتباط',
-    errUuid: 'UUID/مسیر مدیریت نامعتبر است.',
+    errUuid: 'مسیر مدیریت نامعتبر است.',
     errFill: 'همه فیلدها را کامل کنید.'
   },
   en: {
@@ -60,16 +60,16 @@ const I18N = {
     loginBtn: 'Sign in',
     setupBtn: 'Save password & launch',
     working: 'Checking...',
-    recovery: 'Forgot password? Recover with UUID',
+    recovery: 'Forgot password? Recover with admin path',
     setupDone: 'Panel is ready',
     setupDoneHint: 'Your random admin ID (keep it for password recovery) — you never need to type it:',
     copyId: 'Copy ID',
     goPanel: 'Open admin panel',
     idCopied: 'Copied',
-    recoveryTitle: 'Recover password with admin UUID',
-    recoveryHint: 'Enter the admin path (UUID). Owning this path proves admin access.',
-    uuidLabel: 'UUID / admin path',
-    uuidPh: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    recoveryTitle: 'Recover password with admin path',
+    recoveryHint: 'Enter the admin path (panel-…). Owning this path proves admin access.',
+    uuidLabel: 'Admin path',
+    uuidPh: 'panel-xxxxxxxxxxxxxxxxxxxxxxxx',
     recoverBtn: 'Recover password',
     back: 'Back to login',
     themeLight: 'Light mode',
@@ -78,7 +78,7 @@ const I18N = {
     errMismatch: 'Passwords do not match.',
     errShort: 'Password must be at least 4 characters.',
     errNetwork: 'Network error while connecting',
-    errUuid: 'Invalid admin UUID/path.',
+    errUuid: 'Invalid admin path.',
     errFill: 'Please fill all fields.'
   }
 };
@@ -154,7 +154,7 @@ function gateMarkup({ initialized, storageWarning, directGate }) {
         <form id="recoverForm" class="hidden" onsubmit="handleRecover(event)">
           <div class="field">
             <label id="lblUuid" for="recoverUuid"></label>
-            <input type="text" id="recoverUuid" dir="ltr" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            <input type="text" id="recoverUuid" dir="ltr" placeholder="panel-xxxxxxxxxxxxxxxxxxxxxxxx">
           </div>
           <div class="field">
             <label id="lblRecoverPassword" for="recoverPwd"></label>
@@ -387,6 +387,11 @@ ${PWA_HEAD_TAGS}
   .mono-id { font-family: var(--mono); font-size: 0.78rem; padding: 10px 11px; border-radius: 9px; border: 1px dashed var(--line-strong); background: rgba(184, 255, 106, 0.06); color: #d8ffb0; word-break: break-all; }
   body.gate-open { overflow: hidden; }
   body.light-mode { --ink: #f3f6f2; --panel: #ffffff; --panel-2: #f7faf5; --line: rgba(20, 70, 40, 0.13); --line-strong: rgba(20, 110, 55, 0.3); --text: #102318; --muted: #5e7364; --accent: #2e7d32; --cyan: #087f72; }
+  /* مسیر ادمین فقط درگاه ورود را نشان می‌دهد؛ صفحهٔ عمومی پشت آن پنهان است. */
+  body.direct-gate .topbar,
+  body.direct-gate .layout { display: none; }
+  body.direct-gate { overflow: hidden; }
+  body.direct-gate .gate-close { display: none; }
   body.light-mode { background: radial-gradient(circle at 12% -8%, rgba(8, 127, 114, 0.08), transparent 34rem), radial-gradient(circle at 92% 8%, rgba(46, 125, 50, 0.08), transparent 30rem), var(--ink); }
   body.light-mode .topbar { background: rgba(243, 246, 242, 0.85); }
   body.light-mode .signin { background: rgba(46, 125, 50, 0.08); }
@@ -412,7 +417,7 @@ ${PWA_HEAD_TAGS}
   }
 </style>
 </head>
-<body>
+<body class="${directGate ? 'direct-gate' : ''}">
   <header class="topbar">
     <div class="topbar-inner">
       <a class="brand-lockup" href="/" aria-label="StudioDocs home">
@@ -565,7 +570,7 @@ ${PWA_HEAD_TAGS}
     document.getElementById('goPanelBtn').textContent = dict.goPanel;
     document.getElementById('copyIdBtn').textContent = dict.copyId;
     document.getElementById('hintBox').textContent = INITIALIZED
-      ? (state.lang === 'en' ? 'Session is valid for 30 days. Password recovery is available with the admin UUID.' : 'نشست شما ۳۰ روز معتبر است. بازیابی رمز فقط با UUID مدیر امکان‌پذیر است.')
+      ? (state.lang === 'en' ? 'Session is valid for 30 days. Password recovery is available with the admin path.' : 'نشست شما ۳۰ روز معتبر است. بازیابی رمز فقط با مسیر مدیریت امکان‌پذیر است.')
       : (state.lang === 'en' ? 'First run: set an admin password to start the control center.' : 'اولین اجرا: برای شروع مرکز کنترل یک رمز عبور مدیر تعیین کنید.');
     document.title = gateIsOpen() ? BRAND_TITLE : DOCS_TITLE;
   }

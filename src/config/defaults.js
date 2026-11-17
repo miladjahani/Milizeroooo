@@ -77,6 +77,9 @@ export const CONFIG_DEFAULTS = {
   placementTargets: '',
   // — مسیر تحریم‌شکن: sync_placement | multi_cmliu | manual_proxyip
   proxyMode: 'sync_placement',
+  // موتور منابع آی‌پی: cfnew یا nexus. دکمه‌های آماده و اسکنر فقط از منابع
+  // همان موتور تغذیه می‌شوند؛ p و yx همچنان ورودی دستی مستقل دارند.
+  sourceEngine: 'cfnew',
   proxyRegion: 'DE',
   proxyMultiRegions: 'DE,NL,UK,FR,FI,SE,CH,SG,JP,KR,HK,IAD,Oracle,BPB',
   // — گزینه‌های کلاینت که در کانفیگ‌های تولیدشده اعمال می‌شوند
@@ -88,7 +91,7 @@ export const CONFIG_DEFAULTS = {
   customDNS: 'https://223.5.5.5/dns-query',
   customECHDomain: 'cloudflare-ech.com',
   alpn: '',
-  d: 'admin', // آدرس ثابت پنل: /admin (قابل تغییر از تنظیمات)
+  d: '', // مسیر ثابت خالی است؛ هر نصب فقط مسیر رندوم panel-… دارد
   p: '',
   yx: '',
   yxURL: '',
@@ -196,6 +199,7 @@ export const ENV_KEY_MAPPING = {
   alpn: ['alpn', 'ALPN'],
   d: ['d', 'D'],
   p: ['p', 'P'],
+  sourceEngine: ['sourceEngine', 'SOURCE_ENGINE', 'ENGINE', 'engine'],
   yx: ['yx', 'YX'],
   yxURL: ['yxURL', 'YXURL', 'YX_URL'],
   s: ['s', 'S'],
@@ -516,13 +520,13 @@ export const PROXYIP_REGIONS = [
   { code: 'FR', country: 'FR', flag: '🇫🇷', name: 'فرانسه', host: 'ProxyIP.FR.CMLiussss.net' },
   { code: 'FI', country: 'FI', flag: '🇫🇮', name: 'فنلاند', host: 'ProxyIP.FI.CMLiussss.net' },
   { code: 'PL', country: 'PL', flag: '🇵🇱', name: 'لهستان', host: 'ProxyIP.PL.CMLiussss.net' },
-  { code: 'TR', country: 'TR', flag: '🇹🇷', name: 'ترکیه', host: 'ProxyIP.DE.CMLiussss.net' },
+  { code: 'TR', country: 'TR', flag: '🇹🇷', name: 'ترکیه', host: 'ProxyIP.TR.CMLiussss.net' },
   { code: 'IAD', country: 'US', flag: '🇺🇸', name: 'ایالات متحده شرق', host: 'ProxyIP.US.CMLiussss.net' },
   { code: 'LAX', country: 'US', flag: '🇺🇸', name: 'ایالات متحده غرب', host: 'ProxyIP.US.CMLiussss.net' },
   { code: 'SE', country: 'SE', flag: '🇸🇪', name: 'سوئد', host: 'ProxyIP.SE.CMLiussss.net' },
   { code: 'CH', country: 'CH', flag: '🇨🇭', name: 'سوئیس', host: 'ProxyIP.CH.CMLiussss.net' },
   { code: 'CA', country: 'CA', flag: '🇨🇦', name: 'کانادا', host: 'ProxyIP.CA.CMLiussss.net' },
-  { code: 'AE', country: 'AE', flag: '🇦🇪', name: 'امارات', host: 'ProxyIP.DE.CMLiussss.net' },
+  { code: 'AE', country: 'AE', flag: '🇦🇪', name: 'امارات', host: 'ProxyIP.AE.CMLiussss.net' },
   { code: 'SG', country: 'SG', flag: '🇸🇬', name: 'سنگاپور', host: 'ProxyIP.SG.CMLiussss.net' },
   { code: 'JP', country: 'JP', flag: '🇯🇵', name: 'ژاپن', host: 'ProxyIP.JP.CMLiussss.net' },
   { code: 'KR', country: 'KR', flag: '🇰🇷', name: 'کره جنوبی', host: 'ProxyIP.KR.CMLiussss.net' },
@@ -853,6 +857,15 @@ export function normalizeEffectiveConfig(rawConfig = {}) {
     String(rawConfig?.p || '').trim() || (rawRegion && rawRegion !== 'AUTO' && rawRegion !== 'CF')
   ) ? 'manual_proxyip' : 'sync_placement';
   snap.proxyMode = normalizeProxyMode(hadExplicitProxyMode ? rawConfig.proxyMode : legacyProxyMode);
+  snap.sourceEngine = String(snap.sourceEngine || 'cfnew').trim().toLowerCase() === 'nexus' ? 'nexus' : 'cfnew';
+  // مسیر ثابت قدیمی/حدس‌پذیر (UUID یا admin) نباید به‌عنوان مسیر پنل بماند؛
+  // تنها مسیر معتبر همان panel-… رندوم است که در D1 ذخیره شده است.
+  const legacyD = String(snap.d || '').trim().toLowerCase();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(legacyD)
+    || ['admin', 'panel', 'dashboard', 'manage', 'login', 'control'].includes(legacyD)
+    || (legacyD && legacyD.length < 8)) {
+    snap.d = '';
+  }
   snap.proxyRegion = normalizeProxyRegion(rawConfig?.proxyRegion || (legacyProxyMode === 'manual_proxyip' ? rawRegion : snap.sbRegion));
   snap.proxyMultiRegions = normalizeProxyMultiRegions(rawConfig?.proxyMultiRegions || CONFIG_DEFAULTS.proxyMultiRegions);
   snap.ipMode = String(snap.ipMode || '').toLowerCase() === 'fixed' ? 'fixed' : 'country';

@@ -8,10 +8,10 @@ import {
   CONFIG_DEFAULTS,
   DIRECT_DOMAINS,
   normalizeEffectiveConfig,
+  OFFICIAL_DIRECT_IPS,
   OFFICIAL_DIRECT_IPV6
 } from './defaults.js';
 import { EDGE_PROXY_IPS, GLOBAL_HTTP_SOURCES, GLOBAL_SOCKS5_SOURCES } from './sources.js';
-import { IP_POOL, poolCountryName } from './ipPool.js';
 
 // استخر آدرس هر کاربر: IPv4 از مخزن ۶۹۶تایی، IPv6، دامنه، ProxyIP و فیدهای
 // SOCKS/HTTP. آدرس‌های تکراری کاربران قبلی کنار گذاشته می‌شوند تا هر کاربر
@@ -66,35 +66,37 @@ export function buildRandomUserAddressMix(options = {}) {
   });
   manualUrls.forEach(url => used.urls.add(url));
 
-  const wantedCountries = String(options.poolCountries || '')
-    .toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
-  const ipv4Source = wantedCountries.length
-    ? IP_POOL.filter(item => wantedCountries.includes(String(item.cc || '').toUpperCase()))
-    : IP_POOL;
+  // دکمه‌های آماده فقط از منابع موتور (cfnew/Nexus) تغذیه می‌شوند؛ استخر ۶۹۶
+  // آی‌پی دیگر به‌صورت خودکار داخل ساب کاربران ریخته نمی‌شود. کاربر می‌تواند
+  // همان استخر را دستی از دکمهٔ «تصادفی» یا اسکنر به yx اضافه کند.
+  // آی‌پی‌های رسمی Anycast مشترک‌اند و منحصر به یک کاربر نیستند؛ اشتراک آن‌ها
+  // مشکلی ایجاد نمی‌کند و اتفاقاً باعث می‌شود همهٔ کاربران همان موتور را ببینند.
+  const ipv4Source = OFFICIAL_DIRECT_IPS.map(ip => ({ ip, cc: '', label: 'CF-Clean' }));
+  const ipv4Seen = new Set();
   const ipv4 = [];
-  for (const item of mixShuffle(ipv4Source.length ? ipv4Source : IP_POOL, random)) {
-    if (ipv4.length >= (options.ipv4Count ?? 45)) break;
+  for (const item of mixShuffle(ipv4Source, random)) {
+    if (ipv4.length >= (options.ipv4Count ?? 12)) break;
     const host = String(item.ip || '').toLowerCase();
-    if (!host || used.hosts.has(host)) continue;
-    used.hosts.add(host);
-    ipv4.push({ host, label: poolCountryName(item.cc), cc: item.cc });
+    if (!host || ipv4Seen.has(host)) continue;
+    ipv4Seen.add(host);
+    ipv4.push({ host, label: item.label, cc: item.cc });
   }
 
   const ipv6 = [];
   for (const host of mixShuffle(OFFICIAL_DIRECT_IPV6, random)) {
-    if (ipv6.length >= (options.ipv6Count ?? 1)) break;
+    if (ipv6.length >= (options.ipv6Count ?? 2)) break;
     const key = String(host || '').toLowerCase();
-    if (!key || used.hosts.has(key)) continue;
-    used.hosts.add(key);
+    if (!key || ipv6.includes(key)) continue;
     ipv6.push(key);
   }
 
+  const domainSeen = new Set();
   const domains = [];
   for (const item of mixShuffle(DIRECT_DOMAINS, random)) {
-    if (domains.length >= (options.domainCount ?? 4)) break;
+    if (domains.length >= (options.domainCount ?? 6)) break;
     const host = String(item.domain || '').toLowerCase();
-    if (!host || used.hosts.has(host)) continue;
-    used.hosts.add(host);
+    if (!host || domainSeen.has(host)) continue;
+    domainSeen.add(host);
     domains.push({ host, label: item.name || host });
   }
 
@@ -186,6 +188,7 @@ export const USER_PRESETS = {
       ipv4: 'yes',
       ipv6: 'yes',
       sb: 'yes',
+      sourceEngine: 'cfnew',
       sbRegion: 'DE',
       proxyMode: 'manual_proxyip',
       proxyRegion: 'DE',
@@ -229,6 +232,7 @@ export const USER_PRESETS = {
       ipv4: 'yes',
       ipv6: 'yes',
       sb: 'yes',
+      sourceEngine: 'cfnew',
       sbRegion: 'NL',
       proxyMode: 'manual_proxyip',
       proxyRegion: 'NL',
@@ -271,6 +275,7 @@ export const USER_PRESETS = {
       ipv4: 'yes',
       ipv6: 'yes',
       sb: 'yes',
+      sourceEngine: 'cfnew',
       sbRegion: 'TR',
       proxyMode: 'manual_proxyip',
       proxyRegion: 'TR',
@@ -311,6 +316,7 @@ export const USER_PRESETS = {
       ipv4: 'yes',
       ipv6: 'yes',
       sb: 'no',
+      sourceEngine: 'cfnew',
       sbRegion: 'US',
       proxyMode: 'manual_proxyip',
       proxyRegion: 'IAD',
@@ -355,6 +361,7 @@ export const USER_PRESETS = {
       ipv4: 'yes',
       ipv6: 'yes',
       sb: 'yes',
+      sourceEngine: 'cfnew',
       sbRegion: 'DE',
       placement: 'off',
       proxyMode: 'multi_cmliu',
@@ -364,6 +371,45 @@ export const USER_PRESETS = {
       warp: 'no',
       warpMl: 'no',
       warpCount: '0',
+      tcp: 'yes',
+      udp: 'yes'
+    }
+  },
+  'nexus-clean': {
+    id: 'nexus-clean',
+    title: 'Nexus — آی‌پی تمیز و خروجی کشور',
+    subtitle: 'منابع اختصاصی Nexus · کشور خروجی یکدست · VLESS + Trojan',
+    badges: ['Nexus IPs', 'ProxyIP کشوری', 'فرگمنت سبک'],
+    recommended: false,
+    nodeScope: 'all',
+    subNodeCount: 0,
+    dataLimitGb: 0,
+    expireDays: 0,
+    ipLimit: 3,
+    startOnFirstUse: true,
+    poolCountries: 'DE,NL,US,GB',
+    poolCount: 8,
+    configOverrides: {
+      ev: 'yes',
+      et: 'yes',
+      ex: 'no',
+      es: 'no',
+      sourceEngine: 'nexus',
+      region: 'DE',
+      frag: 'yes',
+      fragmentPreset: 'mci',
+      ech: 'no',
+      dkby: 'no',
+      epd: 'yes',
+      epi: 'yes',
+      egi: 'no',
+      ena: 'yes',
+      ipv4: 'yes',
+      ipv6: 'yes',
+      sb: 'yes',
+      proxyMode: 'manual_proxyip',
+      proxyRegion: 'DE',
+      ipRotation: 'off',
       tcp: 'yes',
       udp: 'yes'
     }

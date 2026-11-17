@@ -34,6 +34,7 @@ const MODULE_ORDER = [
   'src/core/runtime.js',
   'src/api/handlers.js',
   'src/ui/loginHtml.js',
+  'src/ui/camouflageHtml.js',
   'src/ui/statusHtml.js',
   'src/ui/adminHtml.js',
   'src/index.js'
@@ -126,7 +127,7 @@ async function buildAll() {
   fs.writeFileSync(path.join(ROOT_DIR, '_worker.js'), obfuscatedCode, 'utf8');
 
   // فایل‌های استاتیک کمکی برای Cloudflare Pages
-  const staticAssetsHtml = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex, nofollow, noarchive"><title>StudioDocs — Static Asset & Web Vitals Monitor</title></head><body>StudioDocs static asset monitor is active.</body></html>`;
+  const staticAssetsHtml = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex, nofollow, noarchive"><title>وب‌سایت</title></head><body>وب‌سایت فعال است.</body></html>`;
   fs.writeFileSync(path.join(distDir, 'status-static.html'), staticAssetsHtml, 'utf8');
   fs.writeFileSync(path.join(publicDir, 'status-static.html'), staticAssetsHtml, 'utf8');
   fs.writeFileSync(path.join(distDir, '.nojekyll'), '', 'utf8');

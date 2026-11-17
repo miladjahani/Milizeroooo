@@ -17,10 +17,10 @@ import { formatBytes, escapeHtml } from '../core/utils.js';
 export function renderUserStatusPageHtml(user, nodes = [], originUrl = '') {
   const urlObj = new URL(originUrl || 'https://miliconfig.workers.dev');
   const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-  // همیشه از مسیر استاندارد /sub/{uuid} استفاده می‌شود تا لینک‌ها دقیقاً
-  // به ساب‌لینک همین کاربر متصل باشند (نه مسیر شخصی/ادمین).
-  const apiToken = user.id || user.uuid || '';
-  const subToken = user.uuid || user.id || '';
+  // همهٔ لینک‌های عمومی از نام کاربر ساخته می‌شوند؛ UUID فقط اعتبارنامهٔ
+  // پروتکل داخل لینک نود است و در هیچ آدرس/شناسهٔ ساب دیده نمی‌شود.
+  const subToken = user.subKey || user.username || user.id || '';
+  const apiToken = subToken;
   const baseSubUrl = `${baseUrl}/sub/${encodeURIComponent(subToken)}`;
   const usageApiUrl = `${baseUrl}/api/status/${encodeURIComponent(apiToken)}`;
   const statusUrl = `${baseUrl}/status/${encodeURIComponent(apiToken)}`;

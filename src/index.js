@@ -7,6 +7,7 @@ import { ADMIN_SUB_NODE_COUNT, BRAND_NAME, DIRECT_DOMAINS, OFFICIAL_DIRECT_IPS, 
 import {
   ensureD1Schema,
   getOrCreateAdminPath,
+  getOrCreateCamouflageSite,
   getStorageDiagnostics,
   getUserByIdOrToken,
   hasAdminPassword,
@@ -35,6 +36,7 @@ import {
   handleBackupApi,
   handleConfigApi,
   handleDashboardStatsApi,
+  handlePlacementApi,
   handlePreferredIpsApi,
   handlePublicUserStatusApi,
   handleScannerApi,
@@ -49,6 +51,7 @@ import {
   handleTelegramProxyWs
 } from './telegram/webProxy.js';
 import { renderLoginPage } from './ui/loginHtml.js';
+import { CAMOUFLAGE_SITE_IDS, renderCamouflageSite } from './ui/camouflageHtml.js';
 import { renderUserStatusPageHtml } from './ui/statusHtml.js';
 import { renderAdminDashboardHtml } from './ui/adminHtml.js';
 import { pwaIconResponse, pwaManifestResponse, pwaServiceWorkerResponse } from './ui/pwa.js';
@@ -121,7 +124,9 @@ export default {
       // فقط یک‌بار در عمر هر ایزوله انجام می‌شود تا هر درخواست CPU اضافی نگیرد
       // (روش آزموده‌شده برای جلوگیری از خطای ۱۱۰۲/۱۱۰۱).
       if (!schemaReady) {
-        await ensureD1Schema(env);
+        // مهاجرت D1 هرگز نباید درخواست را با استثنا بشکند (ریشهٔ خطای 1101).
+        // اگر D1 موقتاً خطا بدهد، پنل با حافظهٔ امن ادامه می‌دهد.
+        try { await ensureD1Schema(env); } catch (_e) {}
         schemaReady = true;
       }
       // مسیر مدیریت رندوم و یکتا برای هر نصب — UUID پیش‌فرض عمومی حذف شده است
@@ -160,6 +165,21 @@ export default {
       }
 
       const pathParts = url.pathname.split('/').filter(Boolean);
+
+      // مسیر ادمین قدیمی (UUID/admin) پس از مهاجرت فقط به درگاه ورود می‌رسد؛
+      // مسیر تازه رندوم است و در URL قدیمی لو نمی‌رود.
+      const legacyAdminPath = normalizeCleanPath(globalCfg.admin_path_legacy || '');
+      if (legacyAdminPath && !url.pathname.includes('/api/')
+        && normalizeCleanPath(url.pathname) === legacyAdminPath) {
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: '/login',
+            'Cache-Control': 'no-store',
+            'X-Robots-Tag': 'noindex, nofollow, noarchive'
+          }
+        });
+      }
 
       // ۲. هندل کردن APIهای احراز هویت، اسکنر، مدیریتی و عمومی
       if (url.pathname.includes('/api/')) {
@@ -210,6 +230,9 @@ export default {
         }
         if (apiSubPath === 'config') {
           return await handleConfigApi(request, env);
+        }
+        if (apiSubPath === 'placement') {
+          return await handlePlacementApi(request, env);
         }
         if (apiSubPath === 'users') {
           return await handleUsersApi(request, env);
@@ -369,21 +392,21 @@ export default {
               }
             } catch (_e) {}
           }
-          // اگر نشست معتبر است، ریشه به پنل هدایت شود تا رفرش/اجرای PWA
-          // کاربر را دوباره به صفحهٔ ورود برنگرداند.
-          if (await verifyAdminSession(env, readCookie('mili_auth'))) {
-            const targetPath = '/' + String(globalCfg.d || adminUuid).replace(/^\/+|\/+$/g, '');
-            return new Response(null, {
-              status: 302,
-              headers: {
-                'Location': targetPath,
-                'Cache-Control': 'no-store',
-                'X-Robots-Tag': 'noindex, nofollow, noarchive'
-              }
-            });
-          }
-          // مسیر مدیریت دیگر داخل HTML لو نمی‌رود؛ فقط پس از ورود موفق از سرور برگردانده می‌شود
-          return await loginPageResponse();
+          // ریشه هرگز صفحهٔ ورود یا پنل نیست: یک سایت عمومی واقعی و ثابت برای
+          // همین استقرار نمایش داده می‌شود. حتی با نشست معتبر هم ریشه به پنل
+          // هدایت نمی‌شود؛ مسیر ادمین تنها راه ورود است.
+          let skin = '';
+          try {
+            skin = await getOrCreateCamouflageSite(env, CAMOUFLAGE_SITE_IDS);
+          } catch (_e) {}
+          return new Response(renderCamouflageSite(url.hostname, skin), {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/html; charset=utf-8',
+              'Cache-Control': 'public, max-age=300, s-maxage=900',
+              'X-Robots-Tag': 'noindex, nofollow, noarchive'
+            }
+          });
         }
 
         // ۴-ب: مسیرهای سازگار با کد پایه /{prefix}/region و /{prefix}/test-api
@@ -426,6 +449,7 @@ export default {
             userObj = allUsers[0] || {
               id: 'mili-admin',
               username: 'Admin',
+              subKey: adminUuid,
               uuid: adminUuid,
               subNodeCount: ADMIN_SUB_NODE_COUNT,
               enabled: true,
@@ -477,6 +501,7 @@ export default {
             targetUser = {
               id: allUsers[0]?.id || null,
               username: BRAND_NAME,
+              subKey: adminUuid,
               uuid: adminUuid,
               subNodeCount: ADMIN_SUB_NODE_COUNT,
               enabled: true,
@@ -661,6 +686,7 @@ export default {
             const adminUser = allUsers[0] || {
               id: 'mili-admin',
               username: BRAND_NAME,
+              subKey: adminUuid,
               uuid: adminUuid,
               subNodeCount: ADMIN_SUB_NODE_COUNT,
               enabled: true,

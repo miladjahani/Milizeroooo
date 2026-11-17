@@ -28,6 +28,7 @@ import {
   PROXY_FEED_REGISTRY,
   getFeedKind
 } from '../config/defaults.js';
+import { NEXUS_COUNTRY_PROXY_BASE, NEXUS_IPV4_SOURCES } from '../config/sources.js';
 import { USER_PRESETS } from '../config/presets.js';
 import { IP_POOL, IP_POOL_COUNTRIES, IP_POOL_COUNTRY_NAMES } from '../config/ipPool.js';
 import {
@@ -37,12 +38,14 @@ import {
   inferScriptName,
   inspectUpdateTarget,
   resolveAccountId,
+  resolveScriptName,
   verifyUpdateToken
 } from '../core/updater.js';
 import { getRandomBytesSafe, isPrivateOrReservedTarget, isValidDomain, isValidIpAddress, md5Hex, normalizeNodeHost, parseAddressAndPort, timingSafeEqualStr } from '../core/utils.js';
 import {
   addAuditLog,
   buildAdminSessionToken,
+  buildUserSubKey,
   changeAdminPassword,
   createUser,
   deleteUser,
@@ -682,6 +685,100 @@ export async function handleConfigApi(request, env) {
   return jsonResponse({ error: 'Method not allowed' }, 405);
 }
 
+// ۱-ب. Placement واقعی کلودفلر: خواندن و اعمال روی خود Worker از طریق API.
+// این کار با تنظیم «منطقهٔ خروجی» پنل فرق دارد: آن ProxyIP مسیر است و این
+// placement واقعی Worker در شبکهٔ کلادفلر را تغییر می‌دهد.
+async function resolvePlacementTarget(env = {}, request) {
+  const token = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || '').trim();
+  if (!token) {
+    return { ok: false, message: 'برای اعمال Placement واقعی، کلید CF_API_TOKEN را در متغیرهای Worker تعریف کنید.' };
+  }
+  const cfg = await loadGlobalConfig(env);
+  const account = await resolveAccountId(token, String(env?.CF_ACCOUNT_ID || cfg.cfAccountId || '').trim());
+  if (!account.accountId) {
+    return { ok: false, message: 'Account ID کلادفلر پیدا نشد: ' + (account.error || 'CF_ACCOUNT_ID را تنظیم کنید.') };
+  }
+  const hostname = new URL(request.url).hostname;
+  const resolved = await resolveScriptName(account.accountId, token, hostname);
+  const scriptName = String(
+    env?.WORKER_NAME || env?.CF_SCRIPT_NAME || cfg.cfScriptName || resolved.scriptName || inferScriptName(hostname) || ''
+  ).trim();
+  if (!scriptName) {
+    return { ok: false, message: 'نام اسکریپت Worker مشخص نیست؛ WORKER_NAME را در متغیرهای Worker تنظیم کنید.' };
+  }
+  return { ok: true, token, accountId: account.accountId, scriptName, source: resolved.source || '' };
+}
+
+export async function handlePlacementApi(request, env) {
+  if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
+  const target = await resolvePlacementTarget(env, request);
+  if (!target.ok) return jsonResponse({ success: false, message: target.message }, 400);
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(target.accountId)}/workers/scripts/${encodeURIComponent(target.scriptName)}/settings`;
+  const headers = {
+    Authorization: 'Bearer ' + target.token,
+    'Content-Type': 'application/json',
+    'User-Agent': 'miliconfig-placement'
+  };
+  if (request.method === 'GET') {
+    try {
+      const resp = await fetch(endpoint, { headers });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.success === false) {
+        const err = data?.errors?.[0]?.message || `HTTP ${resp.status}`;
+        return jsonResponse({ success: false, message: 'خواندن Placement ناموفق بود: ' + err }, 502);
+      }
+      return jsonResponse({
+        success: true,
+        accountId: target.accountId,
+        scriptName: target.scriptName,
+        placement: data.result?.placement || null
+      });
+    } catch (err) {
+      return jsonResponse({ success: false, message: 'خطای شبکه در خواندن Placement: ' + (err?.message || err) }, 502);
+    }
+  }
+  if (request.method !== 'POST') return jsonResponse({ success: false, message: 'Method not allowed' }, 405);
+  let body = {};
+  try { body = await request.json(); } catch (_e) {}
+  const mode = String(body.mode || 'smart').toLowerCase();
+  let placement = null;
+  if (mode === 'off') {
+    placement = null;
+  } else if (mode === 'smart' || mode === 'auto') {
+    placement = { mode: 'smart' };
+  } else if (mode === 'targeted' || mode === 'manual' || mode === 'manual_placement') {
+    const region = String(body.region || '').trim();
+    if (!/^[a-z0-9-]+:[a-z0-9-]+$/i.test(region)) {
+      return jsonResponse({ success: false, message: 'منطقهٔ هدف باید به شکل provider:region باشد (مثل aws:eu-central-1).' }, 400);
+    }
+    placement = { mode: 'targeted', region };
+  } else {
+    return jsonResponse({ success: false, message: 'حالت Placement نامعتبر است.' }, 400);
+  }
+  try {
+    const resp = await fetch(endpoint, {
+      method: 'PATCH',
+      headers,
+      // قرارداد Cloudflare: placement داخل شیء settings فرستاده می‌شود.
+      body: JSON.stringify({ settings: { placement } })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.success === false) {
+      const err = data?.errors?.[0]?.message || `HTTP ${resp.status}`;
+      return jsonResponse({ success: false, message: 'اعمال Placement ناموفق بود: ' + err }, 502);
+    }
+    await addAuditLog(env, 'Placement کلودفلر', `${target.scriptName}: ${JSON.stringify(placement)}`, request.headers.get('CF-Connecting-IP') || '').catch(() => {});
+    return jsonResponse({
+      success: true,
+      message: mode === 'off' ? 'Placement کلودفلر خاموش شد' : 'Placement کلودفلر با موفقیت اعمال شد',
+      placement: data.result?.placement || placement,
+      scriptName: target.scriptName
+    });
+  } catch (err) {
+    return jsonResponse({ success: false, message: 'خطای شبکه در اعمال Placement: ' + (err?.message || err) }, 502);
+  }
+}
+
 // ۲. بروزرسانی نسخه: بررسی و استقرار نسخهٔ تازه از گیت‌هاب روی همین اسکریپت (/api/update)
 // هیچ اطلاعات حساب کلودفلر از کاربر گرفته نمی‌شود؛ اگر ورکر خودش کلید
 // CF_API_TOKEN داشته باشد (تنظیم‌شده در داشبورد کلادفلر) نصب خودکار انجام می‌شود.
@@ -1089,8 +1186,9 @@ export async function handlePublicUserStatusApi(request, env, token) {
   const nodes = await generateUserNodesList(user, url.hostname, {
     limit: user.subNodeCount
   });
+  const subKey = String(user.subKey || buildUserSubKey(user.username || user.id));
   if (isBackupDownload) {
-    const baseSub = `${url.origin}/sub/${encodeURIComponent(user.uuid || user.id)}`;
+    const baseSub = `${url.origin}/sub/${encodeURIComponent(subKey)}`;
     const backupPayload = {
       app: 'miliconfig-user-backup',
       brand: BRAND_NAME,
@@ -1112,11 +1210,11 @@ export async function handlePublicUserStatusApi(request, env, token) {
       },
       links: {
         subscription: baseSub,
-        statusPage: `${url.origin}/status/${encodeURIComponent(user.uuid || user.id)}`,
+        statusPage: `${url.origin}/status/${encodeURIComponent(subKey)}`,
         clash: `${baseSub}?target=clash`,
         singbox: `${baseSub}?target=singbox`,
         raw: `${baseSub}?target=raw`,
-        warpZip: `${url.origin}/warp/${encodeURIComponent(user.uuid || user.id)}?format=zip`,
+        warpZip: `${url.origin}/warp/${encodeURIComponent(subKey)}?format=zip`,
         ovpnZip: `${baseSub}?target=ovpn&format=zip`
       },
       nodeCount: nodes.length,
@@ -1139,7 +1237,7 @@ export async function handlePublicUserStatusApi(request, env, token) {
     user: {
       id: user.id,
       username: user.username,
-      uuid: user.uuid,
+      subKey,
       subNodeCount: user.subNodeCount,
       enabled: user.enabled,
       status: user.status,
@@ -1296,7 +1394,7 @@ export async function handleAuthApi(request, env) {
     }), { status: 200, headers });
   }
 
-  // بازیابی رمز از طریق UUID/مسیر مدیریت (مالکیت مسیر = احراز هویت)
+  // بازیابی رمز از طریق مسیر مدیریت (مالکیت مسیر = احراز هویت)
   if (path === 'reset-password' && request.method === 'POST') {
     const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
     const rl = checkLoginRateLimit(clientIp);
@@ -1311,9 +1409,12 @@ export async function handleAuthApi(request, env) {
     }
     const adminPath = await getOrCreateAdminPath(env);
     const cfg = await loadGlobalConfig(env);
-    if (!matchesAdminKey(key, adminPath, cfg.d)) {
+    // مسیر قبلی فقط برای بازیابی رمز پذیرفته می‌شود تا ارتقای نصب‌های قدیمی
+    // کاربر را قفل نکند؛ مسیر تازه هیچ‌جا در URL قدیمی لو نمی‌رود.
+    const legacyRecoveryKey = cfg.admin_path_legacy && matchesAdminKey(key, cfg.admin_path_legacy, '');
+    if (!matchesAdminKey(key, adminPath, cfg.d) && !legacyRecoveryKey) {
       recordLoginFailure(clientIp);
-      return jsonResponse({ success: false, message: 'UUID/مسیر مدیریت نامعتبر است.' }, 403);
+      return jsonResponse({ success: false, message: 'مسیر مدیریت نامعتبر است.' }, 403);
     }
     clearLoginFailures(clientIp);
     await setAdminPassword(env, newPass);
@@ -1418,8 +1519,8 @@ async function fetchCfnewIspGroups(cfg = {}) {
 }
 
 // خواندن همهٔ مخازن یک خانواده به‌صورت موازی + گزارش سلامت هر منبع
-async function readCfnewFamilySources(family, timeoutMs = 4500) {
-  const sources = SCAN_FAMILY_SOURCES[family] || [];
+async function readCfnewFamilySources(family, timeoutMs = 4500, sourcesOverride = null) {
+  const sources = Array.isArray(sourcesOverride) ? sourcesOverride : (SCAN_FAMILY_SOURCES[family] || []);
   return Promise.all(sources.map(async url => {
     const text = await fetchSourceText(url, timeoutMs);
     let entries = [];
@@ -1439,7 +1540,17 @@ async function readCfnewFamilySources(family, timeoutMs = 4500) {
 async function scanCfnewMode({ mode, limit = 10, region = '', cfg = {} }) {
   const startedAt = Date.now();
   const family = mode === 'proxyip' ? 'proxyip' : mode === 'domain' ? 'domain' : mode;
-  const feeds = await readCfnewFamilySources(family);
+  const engine = String(cfg.sourceEngine || 'cfnew').toLowerCase() === 'nexus' ? 'nexus' : 'cfnew';
+  // دکمه‌های آماده دقیقاً از موتور انتخاب‌شده تغذیه می‌شوند: cfnew یا Nexus.
+  // حالت Nexus برای ProxyIP از دادهٔ کشوری همان موتور استفاده می‌کند.
+  let sourcesOverride = null;
+  if (engine === 'nexus') {
+    if (family === 'ipv4') sourcesOverride = NEXUS_IPV4_SOURCES;
+    else if (family === 'proxyip' && /^[A-Z]{2}$/.test(String(region || '').toUpperCase())) {
+      sourcesOverride = [NEXUS_COUNTRY_PROXY_BASE + String(region).toUpperCase() + '.txt'];
+    }
+  }
+  const feeds = await readCfnewFamilySources(family, 4500, sourcesOverride);
   const diagnostics = feeds.map(feed => ({
     source: feed.url,
     reachable: feed.reachable,
@@ -1449,20 +1560,8 @@ async function scanCfnewMode({ mode, limit = 10, region = '', cfg = {} }) {
   const candidates = [];
   const seen = new Set();
 
-  // استخر آی‌پی اختصاصی miliconfig (داخل مخزن) — همیشه در دسترس و بدون وابستگی به شبکه
-  if (family === 'proxyip' && IP_POOL.length) {
-    const wanted = String(region || '').toUpperCase();
-    const local = wanted ? IP_POOL.filter(item => item.cc === wanted) : IP_POOL;
-    if (local.length) {
-      diagnostics.push({ source: 'builtin:ip-pool', reachable: true, entries: local.length, label: 'استخر اختصاصی' });
-      for (const item of local) {
-        const key = `${item.ip}:443`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        candidates.push({ host: item.ip, port: 443, family: 'proxyip', cc: item.cc });
-      }
-    }
-  }
+  // استخر ۶۹۶ آی‌پی عمداً اینجا خودکار اضافه نمی‌شود؛ منبع دکمه‌های آماده
+  // فقط cfnew یا Nexus است و ۶۹۶ فقط با درخواست صریح کاربر (دکمهٔ تصادفی/دستی).
 
   for (const feed of feeds) {
     for (const entry of feed.entries) {
@@ -1782,11 +1881,14 @@ export async function handleScannerApi(request, env) {
       if (cfMode) {
         const cfg = await loadGlobalConfig(env);
         const limit = Math.min(Math.max(parseInt(body.limit || '10', 10), 1), 30);
+        const requestedEngine = String(body.engine || '').toLowerCase();
         const result = await scanCfnewMode({
           mode: cfMode,
           limit,
           region: String(body.country || '').toUpperCase(),
-          cfg
+          cfg: requestedEngine === 'nexus' || requestedEngine === 'cfnew'
+            ? { ...cfg, sourceEngine: requestedEngine }
+            : cfg
         });
         return jsonResponse(result);
       }

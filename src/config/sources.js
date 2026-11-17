@@ -478,6 +478,16 @@ export const CFNEW_PROXYIP_SOURCES = [
   'https://raw.githubusercontent.com/ymyuuu/IPDB/main/BestProxy/bestproxy&country.txt'
 ];
 
+// منابع موتور Nexus: دادهٔ ساختاریافتهٔ ProxyIP به تفکیک کشور/Colo و
+// فهرست آی‌پی‌های تمیز مستقل. این منابع فقط برای همین موتور استفاده می‌شوند
+// تا خروجی آماده با موتور cfnew قاطی نشود.
+export const NEXUS_COUNTRY_PROXY_BASE = 'https://raw.githubusercontent.com/byJoey/cfnew-ipdb/main/country/';
+export const NEXUS_PROXY_ALL_SOURCE = 'https://raw.githubusercontent.com/byJoey/cfnew-ipdb/main/all.txt';
+// همهٔ ورودی‌های موتور Nexus از دیتاست رسمی cfnew-ipdb خوانده می‌شوند؛
+// هیچ منبع ثالث (مثل لیست‌های تمیز عمومی) داخل این موتور استفاده نمی‌شود.
+export const NEXUS_IPV4_SOURCES = [NEXUS_PROXY_ALL_SOURCE];
+export const NEXUS_IPV6_SOURCES = [];
+
 // گروه‌های اپراتوری cfnew (移动/联通/电信/多线/IPv6) از سرویس youuin
 export const CFNEW_ISP_GROUPS = {
   cmcc: { code: 'cmcc', label: '移动', family: 'ipv4', isp: 'ispMobile' },

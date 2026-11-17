@@ -60,6 +60,7 @@ import {
   normalizeNodeHost,
   parseAddressAndPort
 } from '../core/utils.js';
+import { NEXUS_COUNTRY_PROXY_BASE, NEXUS_IPV4_SOURCES } from '../config/sources.js';
 import { verifyCountryProxies } from '../core/proxyGeo.js';
 import { loadGlobalConfig } from '../db/d1.js';
 import { getEdgePool, pickFromPool } from '../core/edgePool.js';
@@ -200,7 +201,16 @@ export function buildNodeRoutingPlan(cfg = {}, requestColo = '') {
   let proxies = [];
   if (cfg.sb === 'yes') {
     const mode = normalizeProxyMode(cfg.proxyMode);
-    if (mode === 'sync_placement') {
+    // متغیر p تنها منبع معتبر «تحریم‌شکن» است. هر مقداری که در p باشد بر
+    // حالت‌های خودکار/مولتی/Placement اولویت دارد؛ اگر چند مقدار با کاما
+    // وارد شده باشد، نودها بین همان مقصدها می‌چرخند.
+    const explicitP = splitProxyIpList(cfg.p);
+    if (explicitP.length) {
+      proxies = explicitP.map(value => {
+        const meta = proxyMetaFromHost(value);
+        return { host: value, code: meta.code, cc: meta.cc, flag: meta.flag };
+      });
+    } else if (mode === 'sync_placement') {
       // Placement خاموش یعنی نه پینگ مسیر را با pl عوض می‌کنیم و نه به‌صورت
       // خودکار ProxyIP تحمیل می‌کنیم؛ مسیر مستقیم/تنظیمات دستی کاربر می‌ماند.
       if (placement.mode === 'off') {
@@ -234,17 +244,15 @@ export function buildNodeRoutingPlan(cfg = {}, requestColo = '') {
         return { host: proxyIpHostForCode(item.code), code: item.code, cc: item.country, flag: item.flag };
       }).filter(Boolean);
     } else {
-      const custom = splitProxyIpList(cfg.p);
-      if (custom.length) {
-        proxies = custom.map(value => {
-          const meta = proxyMetaFromHost(value);
-          return { host: value, code: meta.code, cc: meta.cc, flag: meta.flag };
-        });
-      } else {
-        const item = getProxyIpRegion(normalizeProxyRegion(cfg.proxyRegion || cfg.sbRegion));
-        if (item) proxies = [{ host: proxyIpHostForCode(item.code), code: item.code, cc: item.country, flag: item.flag }];
-      }
+      const item = getProxyIpRegion(normalizeProxyRegion(cfg.proxyRegion || cfg.sbRegion));
+      if (item) proxies = [{ host: proxyIpHostForCode(item.code), code: item.code, cc: item.country, flag: item.flag }];
     }
+  }
+  // در حالت «کشور خروجی» همهٔ نودها باید نام و مسیر همان کشور را بگیرند،
+  // حتی اگر p یک دامنهٔ بدون کد کشور باشد.
+  const forcedCc = String(cfg.egressCountry || '').trim().toUpperCase();
+  if (/^[A-Z]{2}$/.test(forcedCc) && proxies.length) {
+    proxies = proxies.map(proxy => ({ ...proxy, cc: forcedCc }));
   }
   return { placement, placements, proxies };
 }
@@ -2435,14 +2443,135 @@ export async function fetchOpenVpnNodes(cfg = {}, force = false) {
 // است تا با هر بار خواندن ساب‌لینک عوض نشود.
 // ============================================================================
 export function resolveSanctionsProxy(cfg = {}, seed = '') {
+  // p صریح همیشه اولویت دارد؛ تحریم‌شکن نباید مقدار دستی کاربر را دور بزند.
+  const explicit = splitProxyIpList(cfg.p);
+  if (explicit.length) {
+    return seed ? explicit[stableAddressSeed(String(seed) + '-p') % explicit.length] : explicit[0];
+  }
   const pool = Array.isArray(FALLBACK_PROXY_IPS) ? FALLBACK_PROXY_IPS : [];
   if (!pool.length) return '';
-  const wanted = String(cfg.sbRegion || cfg.region || 'DE').trim().toUpperCase();
-  const usable = wanted && wanted !== 'AUTO' ? pool.filter(item => String(item.regionCode).toUpperCase() === wanted) : [];
+  const wanted = String(cfg.region || cfg.sbRegion || 'DE').trim().toUpperCase();
+  const usable = wanted && wanted !== 'AUTO' && wanted !== 'CF'
+    ? pool.filter(item => String(item.regionCode).toUpperCase() === wanted)
+    : [];
   const list = usable.length ? usable : pool;
   const idx = seed ? stableAddressSeed(String(seed) + '-sb') % list.length : 0;
   const picked = list[idx];
   return `${picked.domain}:${picked.port || 443}`;
+}
+
+// کشور خروجی: فقط یک کد ISO دوحرفی معتبر یا MULTI. نام کشور برای خروجی
+// استفاده نمی‌شود؛ همین کد در ProxyIP و نام همهٔ نودها می‌نشیند.
+export function normalizeEgressCountry(value = '') {
+  const cc = String(value || '').trim().toUpperCase();
+  if (!cc || cc === 'AUTO' || cc === 'CF') return '';
+  if (cc === 'ALL') return 'MULTI';
+  if (cc === 'MULTI') return cc;
+  return /^[A-Z]{2}$/.test(cc) ? cc : '';
+}
+
+// کش ProxyIP کشورها از موتور Nexus (دیتاست cfnew-ipdb). ساب‌لینک نباید برای
+// هر درخواست منتظر شبکه بماند؛ نتیجهٔ هر کشور ۳۰ دقیقه نگه داشته می‌شود.
+const countryProxyCache = new Map();
+const COUNTRY_PROXY_CACHE_TTL = 30 * 60 * 1000;
+
+async function fetchNexusCountryProxies(code = '') {
+  const cc = String(code || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return [];
+  const cached = countryProxyCache.get(cc);
+  if (cached && Date.now() - cached.at < COUNTRY_PROXY_CACHE_TTL) return cached.list.slice();
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2200);
+    const resp = await fetch(NEXUS_COUNTRY_PROXY_BASE + cc + '.txt', {
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'text/plain' },
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if (!resp.ok) return [];
+    const text = (await resp.text()).slice(0, 24000);
+    const list = [];
+    const seen = new Set();
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim().split('#')[0].trim();
+      if (!line || line.startsWith('//')) continue;
+      const match = line.match(/^(\[[0-9a-fA-F:]+\]|(?:\d{1,3}\.){3}\d{1,3}|[a-z0-9.-]+\.[a-z]{2,})(?::(\d{1,5}))?$/i);
+      if (!match) continue;
+      const host = match[1].replace(/^\[|\]$/g, '');
+      const port = parseInt(match[2] || '443', 10) || 443;
+      const value = (host.includes(':') ? `[${host}]` : host) + ':' + port;
+      if (seen.has(value)) continue;
+      seen.add(value);
+      list.push(value);
+      if (list.length >= 8) break;
+    }
+    countryProxyCache.set(cc, { at: Date.now(), list });
+    return list.slice();
+  } catch (_e) {
+    return [];
+  }
+}
+
+// آی‌پی‌های تمیز موتور Nexus؛ فقط وقتی sourceEngine=nexus است خوانده می‌شود.
+let nexusCleanCache = { at: 0, list: [] };
+const NEXUS_CLEAN_TTL = 20 * 60 * 1000;
+
+async function fetchNexusCleanIps() {
+  if (nexusCleanCache.list.length && Date.now() - nexusCleanCache.at < NEXUS_CLEAN_TTL) {
+    return nexusCleanCache.list.slice();
+  }
+  const parsed = await fetchPreferredFromUrls(NEXUS_IPV4_SOURCES.join(','), '443', 2600);
+  const list = [];
+  const seen = new Set();
+  for (const item of parsed) {
+    const host = normalizeNodeHost(item?.ip);
+    if (!host || seen.has(host)) continue;
+    seen.add(host);
+    list.push({ ip: host, port: Number(item.port) || 443, isp: 'Nexus' });
+    if (list.length >= 32) break;
+  }
+  if (list.length) nexusCleanCache = { at: Date.now(), list };
+  return list.slice();
+}
+
+// لیست ProxyIP کشور انتخاب‌شده؛ اگر p دستی با کشور انتخابی هم‌خوان باشد همان
+// دستی حفظ می‌شود، وگرنه منبع معتبر همان کشور جایگزین می‌شود.
+export async function resolveCountryEgressProxies(code = '', cfg = {}) {
+  const cc = String(code || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return { code: cc, proxies: [], source: 'none' };
+  const explicit = splitProxyIpList(cfg.p);
+  if (explicit.length) {
+    const matches = explicit.filter(value => {
+      const meta = proxyMetaFromHost(value);
+      return !meta.cc || String(meta.cc).toUpperCase() === cc;
+    });
+    if (matches.length) return { code: cc, proxies: matches, source: 'p' };
+  }
+  const staticRow = getProxyIpRegion(cc);
+  const staticHost = staticRow && String(staticRow.country).toUpperCase() === cc
+    ? proxyIpHostForCode(staticRow.code)
+    : '';
+  // موتور cfnew از ردیف‌های رسمی خودش استفاده می‌کند؛ فایل‌های کشوری Nexus
+  // فقط وقتی خوانده می‌شوند که کاربر موتور Nexus را انتخاب کرده باشد.
+  const dynamic = String(cfg.sourceEngine || '').toLowerCase() === 'nexus'
+    ? await fetchNexusCountryProxies(cc)
+    : [];
+  // حتی اگر منبع کشوری در دسترس نباشد، یک دامنهٔ ProxyIP با همان کد کشور
+  // ساخته می‌شود تا خروجی همهٔ نودها در یک کشور بماند و برچسب کشور دروغین نشود.
+  const generic = `ProxyIP.${cc}.CMLiussss.net:443`;
+  const proxies = [];
+  const seen = new Set();
+  for (const value of [...dynamic, staticHost, generic]) {
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    proxies.push(value);
+    if (proxies.length >= 4) break;
+  }
+  return {
+    code: cc,
+    proxies,
+    source: dynamic.length ? 'nexus' : staticHost ? 'cfnew' : proxies.length ? 'cfnew-generic' : 'none'
+  };
 }
 
 // کش فهرست آی‌پی‌های ترجیحی (اپراتوری): این فهرست از شبکه خوانده می‌شود و
@@ -2559,6 +2688,9 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   // استخر لبهٔ ترکیبی دامنه/آی‌پی: پاسخ فوری از فهرست داخلی و تازه‌سازی
   // لیست‌های آنلاین در پس‌زمینه؛ تولید ساب‌لینک هیچ‌وقت منتظر شبکه نمی‌ماند.
   const edgePool = await getEdgePool(cfg, { waitUntil: queryOverrides.waitUntil });
+  // موتور آماده: cfnew از منابع داخلی خودش می‌خواند؛ Nexus فقط از فهرست تمیز
+  // اختصاصی خودش. هیچ منبع تصادفی/۶۹۶ بدون درخواست کاربر به‌طور خودکار اضافه نمی‌شود.
+  const engineCleanIps = cfg.sourceEngine === 'nexus' ? await fetchNexusCleanIps() : [];
   const userUuid = String(userOrConfig?.uuid || queryOverrides.uuid || '351c9981-04b6-4103-aa4b-864aa9c91469').toLowerCase();
   // بذر انتخاب آدرس: شناسهٔ کاربر + نوبت بروزرسانی (نه زمان لحظه‌ای)
   const addrSeed = `${userUuid}~${fixedIpMode ? 'pin' : 'e' + rotationEpoch}`;
@@ -2638,8 +2770,29 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   });
   let frontCursor = 0;
   let routingCursor = 0;
+  // کشور خروجی: ?country صریح یا «منطقه» ذخیره‌شدهٔ پنل/کاربر. برای یک کشور،
+  // همهٔ نودها از ProxyIP همان کشور عبور می‌کنند و p دستی فقط وقتی сохраняется
+  // که با همان کشور هم‌خوان باشد. MULTI مسیر قدیمی چندکشوری را نگه می‌دارد.
+  const countryFilter = fixedIpMode ? '' : (normalizeEgressCountry(queryOverrides.country)
+    || normalizeEgressCountry(cfg.region));
+  const egressCountryMode = Boolean(countryFilter && countryFilter !== 'MULTI');
+  let egressCountrySource = '';
+  if (egressCountryMode) {
+    const resolved = await resolveCountryEgressProxies(countryFilter, cfg);
+    if (resolved.proxies.length) {
+      cfg.sb = 'yes';
+      cfg.proxyMode = 'manual_proxyip';
+      cfg.p = resolved.proxies.join(',');
+      cfg.egressCountry = countryFilter;
+      egressCountrySource = resolved.source;
+    } else {
+      // هیچ ProxyIP قابل‌اعتمادی برای این کشور نداریم؛ به‌جای نام‌گذاری
+      // دروغین، تنظیم دستی p و نام کشور را حفظ می‌کنیم.
+      cfg.egressCountry = countryFilter;
+    }
+  }
   // Placement/ProxyIP فقط مسیر و نام نودها را عوض می‌کند؛ منبع Address همچنان
-  // از همان استخر ۶۹۶ آی‌پی یا آدرس‌های دستی می‌آید و دست نمی‌خورد.
+  // از منابع موتور (cfnew/Nexus)، دامنه‌ها و آدرس‌های دستی می‌آید و دست نمی‌خورد.
   const routingPlan = buildNodeRoutingPlan(cfg, queryOverrides.colo || '');
   // بودجهٔ سراسری تولید نودهای چندلوکیشن؛ چند منبع آدرس (دستی، Origin و
   // دامنهٔ پنل) نباید هرکدام جداگانه صدها لینک بسازند.
@@ -2726,20 +2879,12 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     appendFromSource(domains.map(domain => ({ ip: domain, port: 443, isp: 'CF-Domain', domain })));
   }
 
-  // چندلوکیشن: پروکسی‌های کشوری به‌عنوان زنجیره خروجی سمت ورکر استفاده می‌شوند، نه به‌عنوان آدرس نود.
-  // آدرس نود یک آی‌پی ثابت واقعی کلادفلر است تا پینگ بگیرد و ترافیک از کشور انتخابی خارج شود.
-  // منطقه (region) مثل cfnew با «آدرس جایگزین» پیاده می‌شود: آدرس نود همان
-  // آی‌پی ثابت کلادفلر می‌ماند و خروجی از ProxyIP همان منطقه عبور می‌کند.
+  // حالت MULTI قدیمی: پروکسی‌های SOCKS/HTTP هر کشور به‌عنوان زنجیره خروجی
+  // استفاده می‌شوند. برای یک کشور از مسیر ProxyIP بالا می‌رود تا همهٔ نودها
+  // واقعاً یک کشور خروجی داشته باشند و به فیدهای عمومی وابسته نباشند.
   let countryMode = false;
-  // منطقهٔ ذخیره‌شدهٔ کاربر هم باید مثل ?country عمل کند؛ قبلاً فقط برای
-  // ساختن ProxyIP استفاده می‌شد و تب «منطقه» روی کشور نودها اثر کامل نداشت.
-  // ?country= همچنان ساب لوکیشن صریح می‌سازد؛ Placement و منطقهٔ خروجی دیگر
-  // استخر آدرس را عوض نمی‌کنند و فقط مسیر/نام نود را کنترل می‌کنند.
-  const countryFilter = fixedIpMode ? '' : String(queryOverrides.country || '').trim().toUpperCase();
-  if (!domainMode && !ipv6Mode && !fixedIpMode && countryFilter) {
-    const wantedCountries = countryFilter === 'MULTI' || countryFilter === 'ALL'
-      ? MULTI_COUNTRY_CODES.slice()
-      : (COUNTRY_PROXY_SOURCES[countryFilter] ? [countryFilter] : []);
+  if (!domainMode && !ipv6Mode && !fixedIpMode && countryFilter === 'MULTI') {
+    const wantedCountries = MULTI_COUNTRY_CODES.slice();
     // اعتبارسنجی واقعی خروجی برای همهٔ کشورها: تا ۳.۵ ثانیه مهلت، نتیجه ۱۰ دقیقه کش می‌شود
     // تست واقعی پروکسی فقط برای یک یا دو کشور انجام می‌شود؛ در حالت MULTI تعداد
     // فیدها و اتصال‌های هم‌زمان از سقف subrequest ورکر می‌گذرد، پس همان رفتار قبلی
@@ -2801,7 +2946,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
   const hasCustomPreferred = customIps.length > 0 || customDomains.length > 0;
 
   // ورودی‌های پروکسی (پورت غیر CF) به نودهای زنجیره‌ای تبدیل می‌شوند تا پینگ بدهند
-  if (!domainMode && !ipv6Mode && !countryMode && customProxies.length > 0) {
+  if (!domainMode && !ipv6Mode && !countryMode && !egressCountryMode && customProxies.length > 0) {
     appendFromSource(buildLocationSourceList(customProxies, cfg, workerHost, addrSeed + ':custom'));
   }
 
@@ -2833,8 +2978,12 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
       if (staticIpNodes.length || domainNodes.length) {
         appendFromSource(interleaveAddresses(staticIpNodes, domainNodes));
       }
-      // ۲) استخر آی‌پی‌های بهینه ارائه‌شده بر اساس اپراتور
-      if (cfg.epi === 'yes' && !cfg.yxURL) {
+      // ۲) آی‌پی‌های تمیز موتور NexUS (فقط در حالت sourceEngine=nexus)
+      if (engineCleanIps.length > 0) {
+        appendFromSource(engineCleanIps);
+      }
+      // ۳) استخر آی‌پی‌های بهینه ارائه‌شده بر اساس اپراتور (منبع cfnew)
+      if (cfg.epi === 'yes' && !cfg.yxURL && cfg.sourceEngine !== 'nexus') {
         const uouinList = await fetchPreferredIpsCached(cfg, queryOverrides.env || null);
         if (uouinList.length > 0) {
           // ترتیب پایدار: از بین آی‌پی‌های برگشتی، همیشه همان تعداد ثابت و با
@@ -2914,7 +3063,9 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     // در حالت آدرس دستی، خطوط host:port فیدها می‌توانند آی‌پی مشترک بین
     // کاربران بیاورند؛ فقط پروکسی‌های scheme‌دار را به زنجیره اضافه می‌کنیم.
     if (ipOnly.length > 0 && !hasCustomPreferred) appendFromSource(ipOnly);
-    if (proxyOnly.length > 0) appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, addrSeed + ':url'));
+    if (proxyOnly.length > 0 && !egressCountryMode) {
+      appendFromSource(buildLocationSourceList(proxyOnly, cfg, workerHost, addrSeed + ':url'));
+    }
   }
 
   // در حالت آدرس دستی، اگر مجموع نودها به سقف نرسید از استخر زندهٔ لبه پر می‌شود.
@@ -2971,7 +3122,7 @@ export async function generateUserNodesList(userOrConfig, workerHost, queryOverr
     || (cfg.warp === 'no' && cfg.warpPro === 'no' && cfg.warpMl === 'no');
   // در حالت آی‌پی ثابت، نودهای WARP هم ساخته نمی‌شوند تا هیچ نودی با آی‌پی/کشور
   // متفاوت در کلاینت نباشد و قول «آی‌پی ثابت» واقعاً حفظ شود.
-  const warpLinks = warpAllowed && !domainMode && !ipv6Mode && !fixedIpMode && !nowarp
+  const warpLinks = warpAllowed && !domainMode && !ipv6Mode && !fixedIpMode && !egressCountryMode && !nowarp
     ? await buildWarpFamilyLinks(cfg, { always: true })
     : [];
 
