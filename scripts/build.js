@@ -19,6 +19,7 @@ const MODULE_ORDER = [
   'src/config/ipPool.js',
   'src/config/defaults.js',
   'src/config/presets.js',
+  'src/ui/pwaIconsData.js',
   'src/ui/pwa.js',
   'src/core/utils.js',
   'src/core/shadowsocksAead.js',

@@ -325,7 +325,11 @@ export default {
         // ۴-۰: فایل‌های نصب اپ (PWA) — برای دسکتاپ و گوشی، بیرون از مسیر مدیریت
         if (url.pathname === '/manifest.webmanifest') return pwaManifestResponse();
         if (url.pathname === '/sw.js') return pwaServiceWorkerResponse();
-        if (url.pathname === '/pwa-icon.svg') return pwaIconResponse();
+        if (url.pathname === '/pwa-icon.svg') return pwaIconResponse(url.pathname);
+        if (url.pathname.startsWith('/icons/')) {
+          const iconResponse = pwaIconResponse(url.pathname);
+          if (iconResponse) return iconResponse;
+        }
 
         // ۴-۰-۱: مسیر صریح /login برای ورود مستقیم بدون نمایش خودکار در ریشه
         if (url.pathname === '/login') {

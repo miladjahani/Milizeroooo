@@ -6,12 +6,15 @@
 // ============================================================================
 
 import { BRAND_NAME, VERSION } from '../config/defaults.js';
+import { PWA_ICON_192_BASE64, PWA_ICON_512_BASE64 } from './pwaIconsData.js';
 
 const THEME_BG = '#05080a';
+const ICON_192_PATH = '/icons/pwa-192-v3.png';
+const ICON_512_PATH = '/icons/pwa-512-v3.png';
 
 // آیکون ایستای اپ: سپر نئون با حرف M، هم‌خوان با لوگوی پنل و صفحهٔ وضعیت
 export const PWA_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="512" height="512">
-  <rect width="128" height="128" rx="28" fill="${THEME_BG}"/>
+  <rect width="128" height="128" fill="${THEME_BG}"/>
   <circle cx="64" cy="64" r="55" fill="#030a05" stroke="#1f6b38" stroke-width="2"/>
   <circle cx="64" cy="64" r="46" fill="none" stroke="#39ff88" stroke-opacity="0.16" stroke-width="3"/>
   <path d="M64 20 101 33V61C101 83.5 86.5 99.3 64 108.5 41.5 99.3 27 83.5 27 61V33L64 20Z" fill="#0a351b" fill-opacity="0.55" stroke="#2ff27f" stroke-opacity="0.2" stroke-width="11" stroke-linejoin="round"/>
@@ -37,9 +40,12 @@ const MANIFEST = {
   background_color: THEME_BG,
   theme_color: THEME_BG,
   version: String(VERSION).replace(/^v/i, ''),
+  // آیکون‌های PNG واقعی با URL تازه: iOS برای صفحهٔ اصلی SVG را نمی‌پذیرد و
+  // مرورگر/سیستم آیکون قبلی را با همان URL قدیمی کش می‌کند.
   icons: [
-    { src: '/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-    { src: '/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' }
+    { src: ICON_192_PATH, sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: ICON_512_PATH, sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: ICON_512_PATH, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
   ]
 };
 
@@ -60,7 +66,8 @@ export const PWA_HEAD_TAGS = `<link rel="manifest" href="/manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="${BRAND_NAME}">
-<link rel="apple-touch-icon" href="/pwa-icon.svg">`;
+<link rel="apple-touch-icon" href="${ICON_192_PATH}">
+<link rel="icon" type="image/png" sizes="192x192" href="${ICON_192_PATH}">`;
 
 // اسکریپت سمت کلاینت (بدون بک‌اسلش تا از لایهٔ unescape سالم بیرون بیاید)
 export const PWA_CLIENT_JS = `(function () {
@@ -87,7 +94,8 @@ export function pwaManifestResponse() {
     status: 200,
     headers: {
       'Content-Type': 'application/manifest+json; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600'
+      // مانیفست کوچک است و باید آیکون‌های تازه را بدون کش کهنه نشان دهد.
+      'Cache-Control': 'no-cache'
     }
   });
 }
@@ -103,12 +111,37 @@ export function pwaServiceWorkerResponse() {
   });
 }
 
-export function pwaIconResponse() {
+function pwaIconBytes(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+const PWA_ICON_FILES = {
+  [ICON_192_PATH]: PWA_ICON_192_BASE64,
+  [ICON_512_PATH]: PWA_ICON_512_BASE64
+};
+
+export function pwaIconResponse(pathname = '/pwa-icon.svg') {
+  const png = PWA_ICON_FILES[pathname];
+  if (png) {
+    return new Response(pwaIconBytes(png), {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        // نام فایل نسخه‌دار است؛ می‌تواند برای همیشه در کش بماند.
+        'Cache-Control': 'public, max-age=31536000, immutable'
+      }
+    });
+  }
+  if (pathname !== '/pwa-icon.svg') return null;
   return new Response(PWA_ICON_SVG, {
     status: 200,
     headers: {
       'Content-Type': 'image/svg+xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=86400'
+      // نصب‌های قدیمی ممکن است هنوز همین مسیر را بخواهند؛ کش نکنید تا سبز تازه بیاید.
+      'Cache-Control': 'no-cache'
     }
   });
 }
