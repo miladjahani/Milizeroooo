@@ -3,7 +3,9 @@
 // تمام آیکون‌ها stroke-based و با currentColor رنگ می‌گیرند.
 // ============================================================================
 
-const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{FE0F}\u{200D}]/gu;
+// پرچم کشورها (Regional Indicators) جزو ایموجی محسوب نمی‌شود و باید در
+// کارت‌های لوکیشن بماند؛ بقیهٔ بازهٔ ایموجی‌ها حذف می‌شوند.
+const EMOJI_RE = /[\u{1F000}-\u{1F1E5}\u{1F200}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{FE0F}\u{200D}]/gu;
 
 export function stripEmoji(text = '') {
   return String(text).replace(EMOJI_RE, '');
@@ -79,11 +81,13 @@ export function icon(name, extraClass = '') {
   return extraClass ? raw.replace('class="mi ', `class="mi ${extraClass} `) : raw;
 }
 
-export const SHIELD_LOGO_SVG = `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="mili-shield-svg">
-  <circle cx="32" cy="32" r="30" fill="#08110b" stroke="#65a30d" stroke-width="1.5" stroke-opacity="0.65"/>
-  <circle cx="32" cy="32" r="24" fill="#0c1a12"/>
-  <path d="M32 16L44 21.2V30.8C44 39.4 38.88 46.84 32 49.5C25.12 46.84 20 39.4 20 30.8V21.2L32 16Z" stroke="#b5ff4d" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M27.4 31.6L30.8 35L37 28.6" stroke="#b5ff4d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+export const SHIELD_LOGO_SVG = `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="mili-shield-svg" aria-hidden="true">
+  <circle cx="32" cy="32" r="31" fill="#030a05" stroke="#1f6b38" stroke-width="1.2"/>
+  <circle cx="32" cy="32" r="26.5" stroke="#39ff88" stroke-opacity="0.14" stroke-width="2"/>
+  <path d="M32 9.8 50.5 16.2V30.6C50.5 41.8 43.2 49.7 32 54.2 20.8 49.7 13.5 41.8 13.5 30.6V16.2L32 9.8Z" fill="#0a351b" fill-opacity="0.5" stroke="#2ff27f" stroke-opacity="0.2" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M32 9.8 50.5 16.2V30.6C50.5 41.8 43.2 49.7 32 54.2 20.8 49.7 13.5 41.8 13.5 30.6V16.2L32 9.8Z" stroke="#4bff92" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M21.8 39V25.8L32 33.6 42.2 25.8V39" stroke="#2ff27f" stroke-opacity="0.22" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M21.8 39V25.8L32 33.6 42.2 25.8V39" stroke="#63ff9b" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
 export const CLOUD_LOGO_SVG = `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="mili-cloud-svg">
@@ -92,5 +96,5 @@ export const CLOUD_LOGO_SVG = `<svg viewBox="0 0 64 64" fill="none" xmlns="http:
 </svg>`;
 
 export const FAVICON_DATA_URI = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="#05080a" stroke="#a3e635" stroke-width="3"/><path d="M32 15L45 20.5V30.8C45 39.8 39.5 47.5 32 50.5C24.5 47.5 19 39.8 19 30.8V20.5L32 15Z" fill="none" stroke="#b5ff4d" stroke-width="4" stroke-linejoin="round"/></svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#030a05"/><circle cx="32" cy="32" r="27" fill="none" stroke="#1f6b38" stroke-width="2"/><path d="M32 13L46.5 18.4V30.4C46.5 39.2 40.8 45.7 32 49.4C23.2 45.7 17.5 39.2 17.5 30.4V18.4L32 13Z" fill="#0a351b" stroke="#4bff92" stroke-width="2.6" stroke-linejoin="round"/><path d="M24.5 37V27.2L32 33 39.5 27.2V37" fill="none" stroke="#63ff9b" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 )}`;

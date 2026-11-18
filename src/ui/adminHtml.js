@@ -160,7 +160,11 @@ export function renderAdminDashboardHtml(initialData = {}) {
       return acc;
     }, {}),
     placementRegions: PLACEMENT_REGIONS,
-    proxyRegions: PROXYIP_REGIONS,
+    // فقط برچسب و کد برای انتخاب کشورها به مرورگر می‌رود؛ آدرس داخلی سرویس‌ها
+    // داخل باندل سرور می‌ماند و در سورس صفحه لو نمی‌رود.
+    proxyRegions: PROXYIP_REGIONS.map(function(region) {
+      return { code: region.code, country: region.country, flag: region.flag, name: region.name };
+    }),
     vipCountries: EDGE_VIP_COUNTRIES,
     // استخر آی‌پی اختصاصی؛ برای انتخاب تصادفی در پنجرهٔ تنظیمات کاربر و ساخت ساب /ips
     ipPool: IP_POOL,
@@ -2126,6 +2130,23 @@ ${PWA_HEAD_TAGS}
   }
   .loc-name { font-size: 0.8rem; font-weight: 700; }
   .loc-meta { font-size: 0.68rem; color: var(--muted-2); margin-top: 2px; }
+  .loc-country-id { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .loc-flag {
+    width: 34px; height: 34px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--neon-soft);
+    font-size: 1.05rem; line-height: 1;
+  }
+  .loc-flag .mi { width: 17px; height: 17px; color: var(--neon); }
+  .loc-code { color: var(--muted); font-family: var(--mono); direction: ltr; }
+  .loc-tools { margin-top: 14px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.012); }
+  .loc-tools summary { display: flex; align-items: center; gap: 8px; padding: 11px 12px; color: var(--muted); font-size: 0.76rem; font-weight: 700; cursor: pointer; list-style: none; }
+  .loc-tools summary::-webkit-details-marker { display: none; }
+  .loc-tools summary .mi { width: 15px; height: 15px; color: var(--neon); }
+  .loc-tools summary .chev { margin-inline-start: auto; transform: rotate(90deg); transition: transform 0.16s; }
+  .loc-tools[open] summary .chev { transform: rotate(-90deg); }
+  .loc-tools-body { display: grid; gap: 8px; padding: 0 10px 10px; }
+  .loc-tool { padding: 10px 11px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, 0.018); }
+  .loc-tool .toolbar { margin-top: 8px; }
   /* همان حرکت منوی کشویی روی کارت‌های لوکیشن: موج لمس، بالا آمدن و ورود پله‌ای */
   .loc-grid .loc-card { animation: rise .4s cubic-bezier(.22, .8, .3, 1) both; }
   .loc-grid .loc-card:nth-child(1) { animation-delay: 0s; }
@@ -3000,7 +3021,7 @@ ${PWA_HEAD_TAGS}
   .preset-orb-btn.orb-iran-heavy { --orb-color: #c084fc; --orb-rgb: 192, 132, 252; animation-delay: 0.7s; }
   .preset-orb-btn.orb-multi { --orb-color: #fbbf24; --orb-rgb: 251, 191, 36; animation-delay: 1.05s; }
   .preset-orb-btn.orb-intl { --orb-color: #fb7185; --orb-rgb: 251, 113, 133; animation-delay: 1.4s; }
-  .preset-orb-btn.orb-nexus { --orb-color: #22d3ee; --orb-rgb: 34, 211, 238; animation-delay: 1.25s; }
+  .preset-orb-btn.orb-clean { --orb-color: #22d3ee; --orb-rgb: 34, 211, 238; animation-delay: 1.25s; }
   /* دکمهٔ گرد وب‌پروکسی تلگرام، هم‌اندازه و هم‌سبک دکمه‌های ساخت سریع کاربر */
   .preset-orb-btn.orb-tg-proxy { --orb-color: #38bdf8; --orb-rgb: 56, 189, 248; animation-delay: 1.75s; }
   body.light-mode .preset-orb-btn {
@@ -3690,7 +3711,7 @@ ${PWA_HEAD_TAGS}
             <button class="preset-orb-btn orb-iran-heavy" type="button" data-act="quick-preset-user" data-preset="iran-heavy" title="ساخت سریع کاربر: مصرف سنگین — VLESS + Trojan، فرگمنت ایرانسل، خروجی ترکیه" aria-label="مصرف سنگین">${icon('lock')}</button>
             <button class="preset-orb-btn orb-multi" type="button" data-act="quick-preset-user" data-preset="multi-location" title="ساخت سریع کاربر: چندلوکیشن واقعی — خروجی هر نود از ProxyIP کشور خودش، VLESS + Trojan + SS" aria-label="چندلوکیشن واقعی">${icon('globe')}</button>
             <button class="preset-orb-btn orb-intl" type="button" data-act="quick-preset-user" data-preset="international" title="ساخت سریع کاربر: بین‌المللی — بدون فرگمنت، WARP MASQUE، خروجی مستقیم" aria-label="بین‌المللی">${icon('signal')}</button>
-            <button class="preset-orb-btn orb-nexus" type="button" data-act="quick-preset-user" data-preset="nexus-clean" title="ساخت سریع کاربر: Nexus — آی‌پی تمیز، خروجی آلمان، VLESS + Trojan" aria-label="Nexus تمیز">${icon('server')}</button>
+            <button class="preset-orb-btn orb-clean" type="button" data-act="quick-preset-user" data-preset="nexus-clean" title="ساخت سریع کاربر: آی‌پی تمیز — خروجی آلمان، VLESS + Trojan" aria-label="آی‌پی تمیز">${icon('server')}</button>
             <button class="preset-orb-btn orb-tg-proxy" type="button" data-act="open-tg-proxy" title="مدیریت پروکسی تلگرام (وب‌پروکسی)" aria-label="پروکسی تلگرام">${icon('telegram')}</button>
           </div>
           <div class="user-grid" id="usersGrid"></div>
@@ -3771,10 +3792,10 @@ ${PWA_HEAD_TAGS}
           <span class="dots"><i></i><i></i><i></i></span>
           <div class="window-title">${icon('pin')} <span data-i18n="panel.locations">چندلوکیشن</span> <span class="window-sub" data-i18n="panel.locationsSub">سابلینک به تفکیک کشور</span></div>
           <div class="spacer"></div>
-          <button class="btn sm ghost" type="button" data-act="copy-master">${icon('copy')} همه لوکیشن‌ها</button>
+          <button class="btn sm ghost" type="button" data-act="loc-copy-country" data-code="MULTI">${icon('copy')} همه لوکیشن‌ها</button>
         </div>
         <div class="window-body">
-          <p class="loc-meta" style="margin: 0 0 12px;">برای هر منطقه، آدرس‌های همان کشور از منابع عمومی خوانده و تست می‌شوند. با «آی‌پی تصادفی» چند آدرس سالم همان منطقه داخل تنظیمات کاربر انتخابی نوشته می‌شود.</p>
+          <p class="loc-meta" style="margin: 0 0 12px;">فقط کشورهایی نمایش داده می‌شوند که ProxyIP رسمی همان کشور را دارند؛ بنابراین هر کارت واقعاً به خروجی همان کشور وصل می‌شود. لینک‌ها با کاربر انتخاب‌شده ساخته می‌شوند و «آی‌پی تصادفی» هم آدرس‌های سالم همان منطقه را داخل تنظیمات همان کاربر می‌نویسد.</p>
           <div class="scan-controls" style="margin-bottom:12px;">
             <div class="field">
               <label>منطقه</label>
@@ -4095,12 +4116,13 @@ ${PWA_HEAD_TAGS}
   <div class="modal animated" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <div class="modal-card help-modal">
       <div class="modal-head">
-        <b id="helpTitle">${icon('shield')} راهنمای پنل و ساخت کانفیگ</b>
+        <b id="helpTitle">${icon('shield')} راهنمای پنل، اپ و ساخت کانفیگ</b>
         <button class="icon-btn" type="button" data-act="close-modal" data-modal="helpModal" aria-label="بستن راهنما">${icon('close')}</button>
       </div>
 
       <div class="help-tabs" role="tablist" aria-label="بخش‌های راهنما">
         <button class="help-tab is-active" type="button" role="tab" data-help-tab="quick">شروع سریع</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="app">اپ و ۴ لینک</button>
         <button class="help-tab" type="button" role="tab" data-help-tab="config">ساخت کانفیگ</button>
         <button class="help-tab" type="button" role="tab" data-help-tab="users">کاربران</button>
         <button class="help-tab" type="button" role="tab" data-help-tab="scanner">اسکنر</button>
@@ -4112,21 +4134,22 @@ ${PWA_HEAD_TAGS}
       <div class="help-body">
         <!-- شروع سریع -->
         <section class="help-pane is-active" data-help-pane="quick">
-          <p class="help-lead">سلام! این پنل مغز متفکر سرویس توست: از همین‌جا کاربر می‌سازی، نود و آدرس می‌سازی و ساب‌لینک تحویل می‌دهی. نگران نباش، همه‌چیز در سه قدم ساده راه می‌افتد.</p>
+          <p class="help-lead">از همین پنل کاربر می‌سازی، برای هر نفر ساب و صفحهٔ وضعیت تحویل می‌دهی و اپ را روی گوشی نصب می‌کنی. مسیر پیشنهادی چهار قدم است.</p>
           <div class="help-grid">
             <div class="help-card">
-              <h4>${icon('bolt')} سه قدم تا اولین اتصال</h4>
+              <h4>${icon('bolt')} چهار قدم تا اولین اتصال</h4>
               <ol>
-                <li>تب <b>کاربران</b> را باز کن و دکمهٔ <b>ایجاد کاربر جدید</b> را بزن.</li>
-                <li>یک نام، حجم و مدت اعتبار بده؛ بقیهٔ گزینه‌ها را دست نزن و <b>ساخت کاربر</b> را بزن.</li>
-                <li>روی کارت کاربر دکمهٔ <b>کپی ساب</b> را بزن و آدرس را در کلاینت وارد کن.</li>
+                <li>تب <b>کاربران</b> را باز کن و <b>ایجاد کاربر</b> را بزن.</li>
+                <li>نام، حجم و مدت اعتبار بده؛ بقیهٔ گزینه‌ها را دست نزن و <b>ساخت کاربر</b> را بزن.</li>
+                <li>روی کارت کاربر، <b>کپی ساب</b> یا <b>صفحهٔ وضعیت</b> را باز کن.</li>
+                <li>برای استفادهٔ روزمره، از دکمهٔ <b>نصب اپ</b> در هدر استفاده کن.</li>
               </ol>
             </div>
             <div class="help-card">
-              <h4>${icon('link')} ساب‌لینک اصلی مدیر</h4>
+              <h4>${icon('link')} ساب اصلی مدیر</h4>
               <ul>
-                <li>دکمهٔ <b>کپی ساب اصلی</b> در تب کاربران، ساب کامل پنل را کپی می‌کند.</li>
-                <li>این ساب همیشه <b>۴۰۰ نود</b> دارد: VLESS، Trojan، xHTTP، Shadowsocks، WARP و MASQUE.</li>
+                <li>دکمهٔ <b>کپی ساب اصلی</b> در داشبورد، ساب کامل پنل را کپی می‌کند.</li>
+                <li>این ساب تا <b>۳۵۰ نود</b> دارد: VLESS، Trojan، xHTTP، Shadowsocks، WARP و MASQUE.</li>
                 <li>برای تست موتور و مقایسهٔ سرعت‌ها بهترین مرجع همین ساب است.</li>
               </ul>
             </div>
@@ -4138,8 +4161,58 @@ ${PWA_HEAD_TAGS}
                 <li>هر کاربر باید شناسهٔ خودش را داشته باشد؛ شناسهٔ یک کاربر را برای دیگری نده.</li>
               </ul>
             </div>
+            <div class="help-card">
+              <h4>${icon('sparkles')} چیزهایی که تازه شده‌اند</h4>
+              <ul>
+                <li>اپ نصب‌شده در حالت مستقل، مستقیم درگاه ورود را باز می‌کند.</li>
+                <li>صفحهٔ وضعیت فقط <b>چهار لینک</b> اصلی دارد.</li>
+                <li>تب لوکیشن فقط کشورهای دارای <b>ProxyIP رسمی</b> را نشان می‌دهد.</li>
+                <li>راهنمای همین پنجره برای همین قابلیت‌ها به‌روز شده است.</li>
+              </ul>
+            </div>
           </div>
           <div class="help-note"><b>نکته:</b> هر زمان خواستی این راهنما را دوباره ببینی، روی آیکون سپر کنار دکمهٔ خروج در هدر بزن.</div>
+        </section>
+
+        <!-- اپ و لینک‌های اشتراک -->
+        <section class="help-pane" data-help-pane="app">
+          <p class="help-lead">اپ همین پنل را می‌شود روی گوشی یا دسکتاپ نصب کرد؛ صفحهٔ وضعیت هر کاربر هم عمداً ساده و فقط چهار لینک است.</p>
+          <div class="help-grid">
+            <div class="help-card">
+              <h4>${icon('install')} نصب اپ</h4>
+              <ul>
+                <li>از هدر، دکمهٔ <b>نصب اپ</b> را بزن و تأیید کن.</li>
+                <li>روی اندروید و دسکتاپ، پنجرهٔ نصب مرورگر باز می‌شود؛ روی iOS از منوی Share گزینهٔ Add to Home Screen را انتخاب کن.</li>
+                <li>اپ نصب‌شده در حالت مستقل مستقیم به <b>درگاه ورود</b> می‌رود و سایت استتار را باز نمی‌کند.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('link')} چهار لینک صفحهٔ وضعیت</h4>
+              <ul>
+                <li><b>ساب معمولی:</b> خروجی Base64 برای بیشتر کلاینت‌ها.</li>
+                <li><b>Clash / Mihomo:</b> فایل YAML.</li>
+                <li><b>Sing-box:</b> فایل JSON.</li>
+                <li><b>لینک‌های خام:</b> متن سادهٔ کانفیگ‌ها.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('globe')} تب لوکیشن</h4>
+              <ul>
+                <li>فقط کشورهایی نمایش داده می‌شوند که <b>ProxyIP رسمی</b> دارند؛ لوکیشن نمایشی وجود ندارد.</li>
+                <li>لینک هر کارت با <b>کاربر انتخاب‌شده</b> ساخته می‌شود؛ برای همهٔ کشورها هم گزینهٔ MULTI وجود دارد.</li>
+                <li>WARP و OpenVPN در بخش جمع‌شدهٔ پایین همان تب هستند.</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>${icon('refresh')} اگر اپ قدیمی باز شد</h4>
+              <ul>
+                <li>یک‌بار اپ را ببند و باز کن؛ نسخهٔ جدید در حالت مستقل خودش به درگاه ورود می‌رود.</li>
+                <li>اگر باز هم سایت قبلی آمد، اپ را از صفحهٔ اصلی حذف و دوباره نصب کن.</li>
+                <li>ریشهٔ عمومی عمداً یک سایت بی‌ربط می‌ماند؛ مسیر مدیریت را جایی به اشتراک نگذار.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="help-note"><b>یادت باشد:</b> صفحهٔ وضعیت را کامل برای کاربر بفرست؛ همان صفحه لینک‌های آماده و دکمهٔ کپی را دارد.</div>
         </section>
 
         <!-- ساخت کانفیگ -->
@@ -4207,7 +4280,7 @@ ${PWA_HEAD_TAGS}
               <h4>${icon('users')} کارت کاربر</h4>
               <ul>
                 <li><b>کپی ساب:</b> لینک اختصاصی همین کاربر.</li>
-                <li><b>صفحهٔ وضعیت:</b> صفحهٔ قابل ارسال به کاربر با راهنمای اتصال و دکمه‌های دانلود.</li>
+                <li><b>صفحهٔ وضعیت:</b> صفحهٔ قابل ارسال به کاربر با چهار لینک آماده: معمولی، Clash، Sing-box و Raw.</li>
                 <li><b>ویرایش:</b> همهٔ تنظیمات موتور برای همان کاربر.</li>
                 <li><b>ریست مصرف:</b> شمارندهٔ حجم را صفر می‌کند؛ تاریخ انقضا دست نمی‌خورد.</li>
               </ul>
@@ -4216,9 +4289,10 @@ ${PWA_HEAD_TAGS}
               <h4>${icon('layers')} لینک‌های آماده</h4>
               <ul>
                 <li><b>Clash:</b> همان ساب با خروجی مناسب Mihomo و Clash.</li>
-                <li><b>Singbox:</b> خروجی JSON برای Hiddify و sing-box.</li>
+                <li><b>Singbox:</b> خروجی JSON برای کلاینت‌های سازگار sing-box.</li>
                 <li><b>دامنه:</b> فقط نودهای دامنه‌محور، مناسب وقتی آی‌پی خام مشکل دارد.</li>
                 <li><b>IPv6 همراه اول:</b> نسخهٔ IPv6 که در شبکهٔ همراه اول عملکرد بهتری دارد.</li>
+                <li><b>Raw:</b> متن سادهٔ لینک‌ها برای واردکردن دستی.</li>
               </ul>
             </div>
             <div class="help-card">
@@ -4267,14 +4341,14 @@ ${PWA_HEAD_TAGS}
 
         <!-- چندلوکیشن و WARP -->
         <section class="help-pane" data-help-pane="warp">
-          <p class="help-lead">اینجا آدرس‌های آمادهٔ کشور‌به‌کشور و نودهای WARP را می‌بینی؛ همین تب برای کارهای حرفه‌ای بیشترین کاربرد را دارد.</p>
+          <p class="help-lead">اینجا فقط کشورهایی را می‌بینی که خروجی واقعی همان کشور را دارند؛ ابزارهای WARP و OpenVPN در بخش جمع‌شدهٔ پایین قرار گرفته‌اند.</p>
           <div class="help-grid">
             <div class="help-card">
               <h4>${icon('globe')} ساب هر کشور</h4>
               <ul>
-                <li>هر کارت یک کشور است؛ دکمهٔ کپی، ساب همان کشور را می‌دهد.</li>
-                <li>آی‌پی تصادفی تازه، آی‌پی خروجی همان کشور را عوض می‌کند.</li>
-                <li>نسخهٔ IPv6 برای شبکه‌هایی که IPv4 را محدود می‌کنند مفید است.</li>
+                <li>هر کارت یک کشور واقعی است؛ دکمهٔ کپی، ساب همان کشور را برای <b>کاربر انتخاب‌شده</b> می‌دهد.</li>
+                <li>اگر «تنظیمات پیش‌فرض پنل» انتخاب شده باشد، لینک با مسیر مدیریت ساخته می‌شود.</li>
+                <li>گزینهٔ <b>MULTI</b> همهٔ کشورهای پشتیبانی‌شده را یک‌جا می‌دهد.</li>
               </ul>
             </div>
             <div class="help-card">
@@ -4283,7 +4357,7 @@ ${PWA_HEAD_TAGS}
                 <li><b>WARP:</b> اتصال رایگان کلادفلر برای دسترسی به سرویس‌های عمومی.</li>
                 <li><b>WARP PRO:</b> با کلید لایسنس، پهنای باند و کیفیت بالاتر.</li>
                 <li><b>چندلوکیشن:</b> چند لبهٔ مختلف برای انتخاب دستی در کلاینت.</li>
-                <li><b>MASQUE:</b> نسخهٔ HTTP/3 روی CONNECT-IP؛ فقط Mihomo و Clash.Meta و فورک Hiddify آن را می‌فهمند.</li>
+                <li><b>MASQUE:</b> نسخهٔ HTTP/3 روی CONNECT-IP؛ فقط Mihomo، Clash.Meta و کلاینت‌های سازگار sing-box آن را می‌فهمند.</li>
               </ul>
             </div>
             <div class="help-card">
@@ -4331,7 +4405,7 @@ ${PWA_HEAD_TAGS}
             <div class="help-card">
               <h4>${icon('globe')} کدام کلاینت؟</h4>
               <ul>
-                <li><b>Hiddify:</b> ساب معمولی را وارد کن؛ JSON و YAML را هم می‌خواند.</li>
+                <li><b>کلاینت‌های سازگار sing-box:</b> ساب معمولی یا خروجی JSON را وارد کن.</li>
                 <li><b>v2rayNG:</b> ساب معمولی یا base64.</li>
                 <li><b>Clash Verge / FlClash / Stash:</b> دکمهٔ Clash یا <span class="help-kbd">?target=clash</span>.</li>
                 <li><b>Shadowrocket / Streisand:</b> ساب معمولی یا base64.</li>
@@ -4353,6 +4427,14 @@ ${PWA_HEAD_TAGS}
         <section class="help-pane" data-help-pane="fix">
           <p class="help-lead">هر چیزی که خراب شد، اول آرام باش: بیشتر مشکلات با یکی از این چند کار حل می‌شود.</p>
           <div class="help-grid">
+            <div class="help-card">
+              <h4>${icon('install')} اپ نصب‌شده سایت استتار را باز می‌کند</h4>
+              <ul>
+                <li>از خود پنل، دکمهٔ <b>نصب اپ</b> را بزن؛ نسخهٔ جدید در حالت مستقل به درگاه ورود می‌رود.</li>
+                <li>اگر اپ قبلی هنوز سایت عمومی را باز کرد، یک‌بار ببند و باز کن یا حذف و دوباره نصب کن.</li>
+                <li>ریشهٔ سایت عمداً استتار است؛ نشانی مدیریت را جایی منتشر نکن.</li>
+              </ul>
+            </div>
             <div class="help-card">
               <h4>${icon('stop')} ساب در کلاینت وارد نمی‌شود</h4>
               <ul>
@@ -4714,7 +4796,7 @@ ${PWA_HEAD_TAGS}
         '<div class="usage"><span>' + t('card.expiry') + ' ' + fmtDate(u.expireAt) + '</span><span>' + (nodeCount ? nodeCount + ' نود' : t('card.nodesAuto')) + '</span></div>',
         '<div class="user-tags">' + activeProtocols().map(function(p) { return '<span class="tag on">' + p + '</span>'; }).join('') +
           '<span class="tag" title="Placement کلودفلر">' + ICO.pin + ' ' + placementTag + '</span>' +
-          (ucfg.sb === 'yes' ? '<span class="tag on" title="خروجی از آدرس واسط بیرون از ایران">' + ICO.sanctions + ' تحریم‌شکن · ' + (ucfg.proxyMode === 'multi_cmliu' ? 'مولتی CMLiu' : ucfg.proxyMode === 'manual_proxyip' ? 'دستی' : 'هماهنگ') + '</span>' : '') +
+          (ucfg.sb === 'yes' ? '<span class="tag on" title="خروجی از آدرس واسط بیرون از ایران">' + ICO.sanctions + ' تحریم‌شکن · ' + (ucfg.proxyMode === 'multi_cmliu' ? 'مولتی‌لوکیشن' : ucfg.proxyMode === 'manual_proxyip' ? 'دستی' : 'هماهنگ') + '</span>' : '') +
           (ucfg.awgv ? '<span class="tag" title="نسخهٔ امنزیا در نودهای WARP">' + ICO.warp + ' امنزیا ' + ucfg.awgv + '</span>' : '') +
         '</div>',
         '<div class="user-actions" style="margin-top:auto;">',
@@ -4751,48 +4833,35 @@ ${PWA_HEAD_TAGS}
     enhanceCustomSelects();
   }
 
+  function selectedLocationUser() {
+    var userId = $('locUser') ? $('locUser').value : '';
+    if (!userId) return null;
+    return (state.users || []).filter(function(u) { return u.id === userId; })[0] || null;
+  }
+
+  function locationToken() {
+    return userKey(selectedLocationUser()) || ADMIN_PATH;
+  }
+
+  function hasOfficialProxyIp(code) {
+    return (INITIAL_DATA.proxyRegions || []).some(function(region) {
+      return String(region.country || '').toUpperCase() === code;
+    });
+  }
+
+  function locCopyCountry(code) {
+    var token = locationToken();
+    var item = code === 'MULTI' ? null : (INITIAL_DATA.countrySources || {})[code];
+    var label = item && item.name ? item.name : 'همه لوکیشن‌ها';
+    copyText(origin() + '/sub/' + encodeURIComponent(token) + '?country=' + encodeURIComponent(code), 'ساب ' + label + ' کپی شد');
+  }
+
   function renderLocations() {
     var grid = $('locGrid');
     if (!grid) return;
-    var token = userKey(state.users[0]) || ADMIN_PATH;
-    var base = origin() + '/sub/' + encodeURIComponent(token);
-    var countries = INITIAL_DATA.countrySources || {};
-    var ep = origin() + '/warp/' + encodeURIComponent(token);
-    var html = '<div class="loc-card"><div><div class="loc-name">همه لوکیشن‌ها</div><div class="loc-meta">MULTI</div></div>' +
-      '<div class="loc-acts"><button class="loc-act c-copy" type="button" data-act="copy" data-url="' + base + '?country=MULTI" title="کپی ساب" aria-label="کپی ساب">' + ICO.copy + '</button></div></div>' +
-      // وارپ و اپن‌وی‌پی آماده، بدون اسکنر و بدون تنظیم
-      '<div class="loc-card"><div><div class="loc-name">WARP / WARP PRO</div><div class="loc-meta">AmneziaWG + WireGuard · Clash · sing-box · IPv4+IPv6</div></div>' +
-      '<div class="toolbar">' +
-      '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.zip + ' ZIP همهٔ فرمت‌ها</a>' +
-      '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=conf" download>WARP.conf</a>' +
-      '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=links" download>links.txt</a>' +
-      '<a class="btn sm ghost" href="' + origin() + '/warp/masque/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.zip + ' ZIP جداگانهٔ MASQUE</a>' +
-      '</div></div>' +
-      // اندپوینت مخصوص WARP: یک آدرس با همهٔ فرمت‌ها
-      '<div class="loc-card ep-card"><div><div class="loc-name">اندپوینت اختصاصی WARP</div><div class="loc-meta">Clash/Mihomo · Hiddify/sing-box · WireGuard · Shadowrocket — هر کاربر توکن خودش را دارد</div></div>' +
-      '<div class="toolbar">' +
-      '<button class="btn sm primary" type="button" data-act="copy" data-url="' + ep + '?format=clash">' + ICO.copy + ' Clash</button>' +
-      '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=singbox">' + ICO.copy + ' sing-box</button>' +
-      '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=conf">' + ICO.copy + ' WireGuard</button>' +
-      '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=base64">' + ICO.copy + ' base64</button>' +
-      '<a class="btn sm ghost" href="' + ep + '?format=zip" download="miliconfig-warp.zip">' + ICO.zip + ' ZIP</a>' +
-      '</div></div>' +
-      '<div class="loc-card"><div><div class="loc-name">OpenVPN</div><div class="loc-meta">.ovpn · 3 پروفایل تنظیم · ZIP</div></div>' +
-      '<div class="toolbar">' +
-      '<a class="btn sm" href="' + base + '?target=ovpn&format=zip" download>' + ICO.zip + ' ZIP</a>' +
-      '<a class="btn sm ghost" href="' + base + '?target=ovpn" download>.ovpn</a>' +
-      '</div></div>';
-    var vipList = INITIAL_DATA.vipCountries || [];
-    Object.keys(countries).forEach(function(code) {
-      var vip = vipList.indexOf(code) > -1;
-      html += '<div class="loc-card"><div><div class="loc-name">' + countries[code].name + (vip ? ' <span class="tag on">VIP</span>' : '') + '</div><div class="loc-meta">' + code + ' · ' + (vip ? 'منابع ویژه + منابع عادی' : 'منابع منطقه‌ای') + '</div></div>' +
-        '<div class="loc-acts">' +
-        '<button class="loc-act c-copy" type="button" data-act="copy" data-url="' + base + '?country=' + code + '" title="کپی ساب" aria-label="کپی ساب">' + ICO.copy + '</button>' +
-        '<button class="loc-act c-proxy" type="button" data-act="country-proxy" data-code="' + code + '" title="پروکسی → s" aria-label="پروکسی → s">' + ICO.link + '</button>' +
-        '<button class="loc-act c-ip" type="button" data-act="country-ip" data-code="' + code + '" title="آی‌پی → yx" aria-label="آی‌پی → yx">' + ICO.globe + '</button>' +
-        '</div></div>';
-    });
-    grid.innerHTML = html;
+
+    // فهرست کاربران باید قبل از ساخت لینک‌ها آماده شود تا لوکیشن‌ها
+    // همیشه به کاربر انتخاب‌شده اشاره کنند، نه همیشه به اولین کاربر.
     var locUser = $('locUser');
     if (locUser) {
       var current = locUser.value;
@@ -4801,6 +4870,60 @@ ${PWA_HEAD_TAGS}
       }).join('');
       locUser.value = current && (state.users || []).some(function(u) { return u.id === current; }) ? current : '';
     }
+
+    var token = locationToken();
+    var base = origin() + '/sub/' + encodeURIComponent(token);
+    var ep = origin() + '/warp/' + encodeURIComponent(token);
+    var countries = INITIAL_DATA.countrySources || {};
+    var vipList = INITIAL_DATA.vipCountries || [];
+
+    // فقط ProxyIPهای رسمی کشورها «لوکیشن واقعی» هستند. فهرست منبع پروکسی
+    // برای اسکنر کشورها مفید است، ولی لزوماً خروجی همان کشور را نمی‌سازد.
+    var realLocations = {};
+    (INITIAL_DATA.proxyRegions || []).forEach(function(region) {
+      var code = String(region.country || '').toUpperCase();
+      if (!code || realLocations[code]) return;
+      var meta = countries[code] || {};
+      realLocations[code] = {
+        code: code,
+        name: meta.name || region.name || code,
+        flag: meta.flag || region.flag || ''
+      };
+    });
+
+    var html = '<div class="loc-card loc-country"><div class="loc-country-id"><span class="loc-flag">' + ICO.globe + '</span><div><div class="loc-name">همه لوکیشن‌ها</div><div class="loc-meta">MULTI · خروجی همهٔ کشورهای پشتیبانی‌شده</div></div></div>' +
+      '<div class="loc-acts"><button class="loc-act c-copy" type="button" data-act="loc-copy-country" data-code="MULTI" title="کپی ساب همهٔ لوکیشن‌ها" aria-label="کپی ساب همهٔ لوکیشن‌ها">' + ICO.copy + '</button></div></div>';
+
+    Object.keys(realLocations).forEach(function(code) {
+      var item = realLocations[code];
+      var vip = vipList.indexOf(code) > -1;
+      html += '<div class="loc-card loc-country"><div class="loc-country-id"><span class="loc-flag" aria-hidden="true">' + escHtml(item.flag) + '</span><div><div class="loc-name">' + escHtml(item.name) + (vip ? ' <span class="tag on">VIP</span>' : '') + '</div><div class="loc-meta"><span class="loc-code">' + escHtml(code) + '</span> · ProxyIP همان کشور</div></div></div>' +
+        '<div class="loc-acts"><button class="loc-act c-copy" type="button" data-act="loc-copy-country" data-code="' + escHtml(code) + '" title="کپی ساب ' + escHtml(item.name) + '" aria-label="کپی ساب ' + escHtml(item.name) + '">' + ICO.copy + '</button></div></div>';
+    });
+
+    // ابزارهای تکمیلی داخل یک بخش جمع‌شده می‌مانند تا صفحهٔ لوکیشن‌ها فقط
+    // کشورها را نشان دهد و شلوغ نشود.
+    html += '<details class="loc-tools"><summary>' + ICO.warp + ' ابزارهای WARP و OpenVPN <span class="chev">' + ICO.chevron + '</span></summary><div class="loc-tools-body">' +
+      '<div class="loc-tool"><div><div class="loc-name">WARP / WARP PRO</div><div class="loc-meta">AmneziaWG + WireGuard · Clash · sing-box</div></div><div class="toolbar">' +
+      '<a class="btn sm" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.zip + ' ZIP</a>' +
+      '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=conf" download>WARP.conf</a>' +
+      '<a class="btn sm ghost" href="' + origin() + '/warp/' + encodeURIComponent(token) + '?format=links" download>links.txt</a>' +
+      '<a class="btn sm ghost" href="' + origin() + '/warp/masque/' + encodeURIComponent(token) + '?format=zip" download>' + ICO.zip + ' MASQUE</a>' +
+      '</div></div>' +
+      '<div class="loc-tool"><div><div class="loc-name">اندپوینت اختصاصی WARP</div><div class="loc-meta">Clash · sing-box · WireGuard · Shadowrocket</div></div><div class="toolbar">' +
+      '<button class="btn sm primary" type="button" data-act="copy" data-url="' + ep + '?format=clash">' + ICO.copy + ' Clash</button>' +
+      '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=singbox">' + ICO.copy + ' sing-box</button>' +
+      '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=conf">' + ICO.copy + ' WireGuard</button>' +
+      '<button class="btn sm ghost" type="button" data-act="copy" data-url="' + ep + '?format=base64">' + ICO.copy + ' base64</button>' +
+      '<a class="btn sm ghost" href="' + ep + '?format=zip" download="miliconfig-warp.zip">' + ICO.zip + ' ZIP</a>' +
+      '</div></div>' +
+      '<div class="loc-tool"><div><div class="loc-name">OpenVPN</div><div class="loc-meta">.ovpn · 3 پروفایل تنظیم · ZIP</div></div><div class="toolbar">' +
+      '<a class="btn sm" href="' + base + '?target=ovpn&format=zip" download>' + ICO.zip + ' ZIP</a>' +
+      '<a class="btn sm ghost" href="' + base + '?target=ovpn" download>.ovpn</a>' +
+      '</div></div>' +
+      '</div></details>';
+
+    grid.innerHTML = html;
     enhanceCustomSelects();
   }
 
@@ -4844,8 +4967,11 @@ ${PWA_HEAD_TAGS}
 
   function locCopyRegion() {
     var code = $('locRegion') ? $('locRegion').value : 'DE';
-    var user = (state.users || []).filter(function(u) { return u.id === ($('locUser') ? $('locUser').value : ''); })[0] || state.users[0];
-    var token = userKey(user) || ADMIN_PATH;
+    if (!hasOfficialProxyIp(code)) {
+      showToast('برای ' + code + ' ProxyIP رسمی وجود ندارد؛ از کارت‌های لوکیشن واقعی استفاده کنید.', 'err');
+      return;
+    }
+    var token = locationToken();
     copyText(origin() + '/sub/' + encodeURIComponent(token) + '?country=' + code, 'ساب منطقهٔ ' + code + ' کپی شد');
   }
 
@@ -5556,7 +5682,7 @@ ${PWA_HEAD_TAGS}
       title: 'آدرس‌ها و منطقه',
       icon: 'pin',
       fields: [
-        { key: 'sourceEngine', section: 'منابع', label: 'موتور منابع آی‌پی', type: 'select', def: 'cfnew', options: [['cfnew', 'CFnew — منابع و دامنه‌های رسمی cfnew'], ['nexus', 'Nexus — آی‌پی تمیز و ProxyIP کشوری']], hint: 'دکمه‌های آماده و لیست پیش‌فرض نودها از موتور انتخابی می‌آیند؛ yx و p همچنان ورودی دستی مستقل هستند.' },
+        { key: 'sourceEngine', section: 'منابع', label: 'موتور منابع آی‌پی', type: 'select', def: 'cfnew', options: [['cfnew', 'منابع ابری — دامنه‌ها و آی‌پی‌های لبه'], ['nexus', 'موتور پیشرفته — آی‌پی تمیز و ProxyIP کشوری']], hint: 'دکمه‌های آماده و لیست پیش‌فرض نودها از موتور انتخابی می‌آیند؛ yx و p همچنان ورودی دستی مستقل هستند.' },
         { key: 'placement', section: 'منطقه', label: 'منطقهٔ خروجی — Cloudflare Placement', type: 'select', def: 'auto', options: 'placementRegions', hint: 'کشور خروجی با ProxyIP همان کشور اعمال می‌شود؛ انتخاب یک کشور باعث می‌شود همهٔ نودها از همان کشور خارج شوند. «خودکار» از request.cf.colo استفاده می‌کند. <span class="field-hint"><button class="btn sm" type="button" data-act="apply-cf-placement">' + ICO.pin + ' اعمال روی Cloudflare</button> <span id="cfPlacementStatus" style="margin-right:8px"></span></span>' },
         { key: 'ipMode', section: 'آی‌پی نود در کلاینت', label: 'حالت آی‌پی', type: 'select', def: 'country', options: [['country', 'کشور ثابت (آدرس‌ها از استخر تازه می‌شوند)'], ['fixed', 'آی‌پی ثابت (یک آدرس برای همهٔ نودها)']], hint: 'در حالت «آی‌پی ثابت»، با هر پینگ یا بروزرسانی ساب، آدرس و کشور خروجی نود عوض نمی‌شود؛ برای تضمین این ثبات، نودهای WARP در این حالت ساخته نمی‌شوند.' },
         { key: 'ipPinned', section: 'آی‌پی نود در کلاینت', label: 'آی‌پی ثابت دلخواه', type: 'text', def: '', ph: '104.16.0.1 یا 104.16.0.1:443 — خالی = انتخاب پایدار خودکار', hint: 'فقط در حالت «آی‌پی ثابت» استفاده می‌شود؛ خالی بماند، پنل خودش یک آدرس پایدار انتخاب می‌کند.' },
@@ -5566,7 +5692,7 @@ ${PWA_HEAD_TAGS}
         { key: 'proxyMode', section: 'مسیر خروج', label: 'منطقهٔ تحریم‌شکن', type: 'select', def: 'sync_placement', options: [['sync_placement', '⚡ خودکار (هماهنگ با منطقهٔ Placement بالا)'], ['multi_cmliu', '🌍 مولتی‌لوکیشن واقعی (هر کشور یک خروجی)'], ['manual_proxyip', '📍 تک‌کشور / دستی']], showWhenSwitch: 'sb', hint: 'در حالت خودکار، Colo همان درخواست به‌صورت داینامیک به ProxyIP تبدیل می‌شود؛ در حالت مولتی، هر نود ProxyIP کشور خودش را در مسیر دارد.' },
         { key: 'proxyRegion', section: 'مسیر خروج', label: 'کشور تحریم‌شکن (تک‌کشور)', type: 'select', def: 'DE', options: 'proxyRegions', showWhenSwitch: 'sb', showWhen: { key: 'proxyMode', equals: 'manual_proxyip' }, hint: 'با انتخاب کشور، کادر آدرس واسط به‌صورت خودکار پر می‌شود؛ می‌توانید بعداً آن را دستی تغییر دهید.' },
         { key: 'proxyMultiRegions', section: 'مسیر خروج', label: 'کشورهای تحریم‌شکن (چندانتخابی)', type: 'regionMulti', wide: true, def: 'DE,NL,UK,FR,FI,SE,CH,SG,JP,KR,HK,IAD,Oracle,BPB', showWhenSwitch: 'sb', showWhen: { key: 'proxyMode', equals: 'multi_cmliu' }, hint: 'برای هر کشور یک نود مجزا با ProxyIP همان کشور در مسیر ساخته می‌شود؛ Address نود فقط برای پینگ است.' },
-        { key: 'p', section: 'مسیر خروج', label: 'آدرس واسط (ProxyIP)', type: 'text', def: '', list: 'dlProxyIp', ph: 'ProxyIP.DE.CMLiussss.net:443', showWhenSwitch: 'sb', hint: 'در حالت دستی می‌توانید یک یا چند دامنه/آی‌پی را با کاما وارد کنید؛ در حالت خودکار خالی بگذارید.' },
+        { key: 'p', section: 'مسیر خروج', label: 'آدرس واسط (ProxyIP)', type: 'text', def: '', list: 'dlProxyIp', ph: 'ProxyIP.DE.your-domain.net:443', showWhenSwitch: 'sb', hint: 'در حالت دستی می‌توانید یک یا چند دامنه/آی‌پی را با کاما وارد کنید؛ در حالت خودکار خالی بگذارید.' },
         { key: 's', section: 'مسیر خروج', label: 'پروکسی خروجی', type: 'text', def: '', list: 'dlProxy', ph: 'socks5://host:1080' }
       ]
     },
@@ -5620,6 +5746,12 @@ ${PWA_HEAD_TAGS}
   var NL = String.fromCharCode(10);
   var SEP_RE = new RegExp('[,' + String.fromCharCode(10, 13) + ';،]+');
 
+  // بعضی کدهای داخلی نام برندشان نباید در رابط کاربری دیده شود؛ مقدار داخلی
+  // برای کارکرد ساب و تنظیمات حفظ می‌شود و فقط برچسب نمایشی عوض می‌شود.
+  function publicRegionCode(code) {
+    return String(code || '').toUpperCase() === 'BPB' ? 'FAST' : code;
+  }
+
   function optionHtml(field, current) {
     var list = field.options;
     var pairs = [];
@@ -5646,7 +5778,7 @@ ${PWA_HEAD_TAGS}
       }
       else if (list === 'proxyRegions') {
         pairs = (INITIAL_DATA.proxyRegions || []).map(function(region) {
-          return [region.code, region.flag + ' ' + region.name + ' — ' + region.code];
+          return [region.code, region.flag + ' ' + region.name + ' — ' + publicRegionCode(region.code)];
         });
       }
     } else if (Array.isArray(list)) {
@@ -5834,7 +5966,7 @@ ${PWA_HEAD_TAGS}
           (region.code === 'IAD' && picked.indexOf('US') !== -1);
         return '<label class="region-chip' + (on ? ' is-on' : '') + '">' +
           '<input type="checkbox" data-multi-pick="' + field.key + '" value="' + region.code + '"' + (on ? ' checked' : '') + '>' +
-          '<span>' + region.flag + ' ' + region.name + ' <b>' + region.code + '</b></span></label>';
+          '<span>' + region.flag + ' ' + region.name + ' <b>' + publicRegionCode(region.code) + '</b></span></label>';
       }).join('');
       return '<div class="field"' + wideClass + shell + '><label>' + field.label + '</label>' +
         '<input type="hidden" id="' + id + '" data-uf="' + field.key + '" value="' + picked.join(',') + '">' +
@@ -5971,7 +6103,7 @@ ${PWA_HEAD_TAGS}
     parts.push(chip('منطقه <b>' + placementText + '</b>'));
     parts.push(chip(cfg.ipMode === 'fixed' ? '<b>آی‌پی ثابت</b>' : 'کشور ثابت', cfg.ipMode === 'fixed' ? 'on' : ''));
     parts.push(chip('فرگمنت <b>' + (cfg.frag === 'yes' && cfg.fragmentPreset !== 'off' ? 'روشن' : 'خاموش') + '</b>', cfg.frag === 'yes' && cfg.fragmentPreset !== 'off' ? 'on' : ''));
-    var proxyText = cfg.proxyMode === 'multi_cmliu' ? 'مولتی‌CMLiu' : cfg.proxyMode === 'manual_proxyip' ? 'دستی' : 'هماهنگ با Placement';
+    var proxyText = cfg.proxyMode === 'multi_cmliu' ? 'مولتی‌لوکیشن' : cfg.proxyMode === 'manual_proxyip' ? 'دستی' : 'هماهنگ با Placement';
     parts.push(chip('تحریم‌شکن <b>' + (cfg.sb === 'yes' ? 'روشن · ' + proxyText : 'خاموش') + '</b>', cfg.sb === 'yes' ? 'on' : ''));
     var warpOn = cfg.warp === 'yes' || cfg.warpPro === 'yes' || cfg.warpMl === 'yes' || cfg.warpMasque === 'yes';
     if (warpOn) parts.push(chip('WARP <b>' + (parseInt(cfg.warpCount, 10) || 0) + '</b>', 'on'));
@@ -7315,6 +7447,7 @@ ${PWA_HEAD_TAGS}
     var act = el.getAttribute('data-act');
 
     if (act === 'copy') { copyText(el.getAttribute('data-url') || '', 'لینک کپی شد'); }
+    else if (act === 'loc-copy-country') { locCopyCountry(el.getAttribute('data-code')); }
     else if (act === 'copy-master') { copyText(masterSub(), 'سابلینک اصلی کپی شد'); }
     else if (act === 'open-create') { openUserForm(null); }
     else if (act === 'quick-preset-user') { quickCreatePresetUser(el.getAttribute('data-preset'), el); }
@@ -7484,6 +7617,10 @@ ${PWA_HEAD_TAGS}
     }
     if (target.matches && target.matches('input[data-multi-pick]')) {
       syncRegionPicker(target.getAttribute('data-multi-pick'));
+      return;
+    }
+    if (target.id === 'locUser') {
+      renderLocations();
       return;
     }
     if (target.matches && target.matches('.switch input[data-key]')) {

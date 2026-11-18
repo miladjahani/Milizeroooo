@@ -377,9 +377,9 @@ export const USER_PRESETS = {
   },
   'nexus-clean': {
     id: 'nexus-clean',
-    title: 'Nexus — آی‌پی تمیز و خروجی کشور',
-    subtitle: 'منابع اختصاصی Nexus · کشور خروجی یکدست · VLESS + Trojan',
-    badges: ['Nexus IPs', 'ProxyIP کشوری', 'فرگمنت سبک'],
+    title: 'آی‌پی تمیز — خروجی کشور',
+    subtitle: 'آی‌پی‌های تمیز · کشور خروجی یکدست · VLESS + Trojan',
+    badges: ['آی‌پی تمیز', 'ProxyIP کشوری', 'فرگمنت سبک'],
     recommended: false,
     nodeScope: 'all',
     subNodeCount: 0,

@@ -188,6 +188,16 @@ export function renderLoginPage(host = '', options = {}) {
 <title>StudioDocs — Static Asset & Web Vitals Monitor</title>
 <link rel="icon" href="${FAVICON_DATA_URI}">
 ${PWA_HEAD_TAGS}
+<script>
+  // نصب‌های قدیمی هنوز start_url=/ را نگه داشته‌اند؛ در حالت اپ مستقل
+  // ریشه را به درگاه ورود هدایت می‌کنیم تا وب‌سایت استتار باز نشود.
+  (function () {
+    try {
+      var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+      if (standalone && location.pathname === '/' ) location.replace('/login');
+    } catch (e) {}
+  })();
+</script>
 <style>
   :root {
     --ink: #080c0b;

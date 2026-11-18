@@ -43,7 +43,7 @@ import {
 
 export const BRAND_NAME = 'miliconfig';
 export const BRAND_UPPER = 'MILICONFIG';
-export const VERSION = 'v3.15.0';
+export const VERSION = 'v3.16.0';
 export const DEFAULT_ADMIN_UUID = '351c9981-04b6-4103-aa4b-864aa9c91469';
 
 // سقف سخت تعداد نودهای هر ساب‌لینک؛ حالت خودکار هم بیشتر از این نود نمی‌سازد.
@@ -534,7 +534,7 @@ export const PROXYIP_REGIONS = [
   { code: 'Oracle', country: '', flag: '☁️', name: 'دیتاسنتر اوراکل', host: 'ProxyIP.Oracle.CMLiussss.net' },
   { code: 'DigitalOcean', country: '', flag: '🌊', name: 'دیجیتال‌اوشن', host: 'ProxyIP.DigitalOcean.CMLiussss.net' },
   { code: 'Vultr', country: '', flag: '🦅', name: 'ولتر کلود', host: 'ProxyIP.Vultr.CMLiussss.net' },
-  { code: 'BPB', country: '', flag: '🛡️', name: 'سرور پرسرعت BPB', host: 'bpb.yousef.isegaro.com' }
+  { code: 'BPB', country: '', flag: '⚡', name: 'سرور پرسرعت', host: 'bpb.yousef.isegaro.com' }
 ];
 
 export const DEFAULT_PROXYIP_REGION = 'DE';

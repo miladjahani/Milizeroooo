@@ -274,5 +274,9 @@ export function renderCamouflageSite(host = '', skin = '') {
   const id = RENDERERS[skin] ? skin : CAMOUFLAGE_SITE_IDS[0];
   const html = RENDERERS[id]();
   // Host is only used for a subtle local reference in metadata; keep escaped.
-  return html.replace('</head>', `<meta name="generator" content="site-${escapeHtml(id)}"><link rel="canonical" href="https://${escapeHtml(String(host || '').replace(/^https?:\/\//, ''))}/"></head>`);
+  // نصب‌های قبلی هنوز start_url=/ دارند؛ وقتی سایت در حالت اپ مستقل باز شود
+  // مستقیم به درگاه ورود می‌رویم تا کاربر به‌جای سایت استتار، پنل را ببیند.
+  // مسیر ورود به‌صورت کدگذاری‌شده ساخته می‌شود تا در سورس ریشه لو نرود.
+  const standaloneBridge = `<script>(function(){try{var s=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;if(s&&location.pathname==='/')location.replace(String.fromCharCode(47,108,111,103,105,110));}catch(e){}})();</script>`;
+  return html.replace('</head>', `${standaloneBridge}<meta name="generator" content="site-${escapeHtml(id)}"><link rel="canonical" href="https://${escapeHtml(String(host || '').replace(/^https?:\/\//, ''))}/"></head>`);
 }

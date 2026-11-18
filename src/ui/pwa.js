@@ -9,12 +9,15 @@ import { BRAND_NAME, VERSION } from '../config/defaults.js';
 
 const THEME_BG = '#05080a';
 
-// آیکون ایستای اپ: همان سپر برند با پس‌زمینهٔ تیره تا در لانچر خوانا بماند
+// آیکون ایستای اپ: سپر نئون با حرف M، هم‌خوان با لوگوی پنل و صفحهٔ وضعیت
 export const PWA_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="512" height="512">
-  <rect width="128" height="128" rx="26" fill="${THEME_BG}"/>
-  <circle cx="64" cy="64" r="50" fill="#0c1a12" stroke="#65a30d" stroke-width="2" stroke-opacity="0.7"/>
-  <path d="M64 32L88 42.4V61.6C88 78.8 77.8 93.6 64 99C50.2 93.6 40 78.8 40 61.6V42.4L64 32Z" fill="none" stroke="#b5ff4d" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M54.8 63.2L61.6 70L74 57.2" fill="none" stroke="#b5ff4d" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="128" height="128" rx="28" fill="${THEME_BG}"/>
+  <circle cx="64" cy="64" r="55" fill="#030a05" stroke="#1f6b38" stroke-width="2"/>
+  <circle cx="64" cy="64" r="46" fill="none" stroke="#39ff88" stroke-opacity="0.16" stroke-width="3"/>
+  <path d="M64 20 101 33V61C101 83.5 86.5 99.3 64 108.5 41.5 99.3 27 83.5 27 61V33L64 20Z" fill="#0a351b" fill-opacity="0.55" stroke="#2ff27f" stroke-opacity="0.2" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M64 20 101 33V61C101 83.5 86.5 99.3 64 108.5 41.5 99.3 27 83.5 27 61V33L64 20Z" stroke="#4bff92" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M44 78V52L64 67 84 52V78" stroke="#2ff27f" stroke-opacity="0.22" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 78V52L64 67 84 52V78" stroke="#63ff9b" stroke-width="9.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
 const MANIFEST = {
@@ -23,7 +26,10 @@ const MANIFEST = {
   description: 'مرکز کنترل اتصال و کانفیگ',
   lang: 'fa',
   dir: 'rtl',
-  start_url: '/',
+  // اپ نصب‌شده باید مستقیم به درگاه ورود/پنل برود؛ ریشهٔ عمومی برای استتار می‌ماند.
+  // id را روی / نگه می‌داریم تا نصب‌های قبلی همان اپ شناخته شوند.
+  id: '/',
+  start_url: '/login',
   scope: '/',
   display: 'standalone',
   display_override: ['standalone', 'minimal-ui'],
